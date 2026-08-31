@@ -360,8 +360,21 @@ if pagina == PAGINAS[0]:
                     st.session_state.df_editado = df.copy()
                     st.session_state.relatorio_final = None 
                     st.session_state.last_file_name = uploaded_file.name
+                    
+                    template_name = "modelo de tabela globalizadovf_final_xls"
+                    if template_name not in st.session_state.templates:
+                        template_name = list(st.session_state.templates.keys())[0]
+                    template = st.session_state.templates[template_name]
+                    
+                    df_mensal, df_cumulativo = processar_relatorio(st.session_state.df_editado.copy(), template)
+                    st.session_state.relatorio_final = df_mensal
+                    st.session_state.relatorio_cumulativo = df_cumulativo
+                    st.session_state.col_agrupamento = template["colunas_agrupamento"]
+                    
+                    st.session_state.pagina_atual = PAGINAS[1]
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"Erro ao ler o ficheiro: {e}")
+                    st.error(f"Erro ao ler e processar o ficheiro: {e}")
                     
     if st.session_state.df_editado is not None:
         st.success("✅ Dados em bruto importados com sucesso! (Modo de Apenas Leitura)")
@@ -371,45 +384,13 @@ if pagina == PAGINAS[0]:
 # PÁGINA 2: GERAR RELATÓRIO
 # =========================================================
 elif pagina == PAGINAS[1]:
-    st.title("📑 2. Gerar Relatório")
+    st.header("📑 Relatórios de Pagamentos")
     
     if st.session_state.df_editado is None:
         st.warning("⚠️ Volte à primeira página e carregue um ficheiro Excel.")
-    else:
-        st.subheader("🛠️ 1. Selecione o Modelo/Template")
-        
-        lista_templates = list(st.session_state.templates.keys())
-        
-        template_principal = "modelo de tabela globalizadovf_final_xls"
-        if template_principal in lista_templates:
-            lista_templates.remove(template_principal)
-            lista_templates.insert(0, template_principal)
-            
-        template_selecionado = st.selectbox("Selecione o Modelo/Template:", lista_templates)
-        
-
-
-        st.divider()
-        st.subheader("⚙️ 2. Gerar e Filtrar Relatório")
-        if st.button("🚀 Processar e Gerar Relatório"):
-            with st.spinner("A gerar tabela baseada no template..."):
-                try:
-                    template = st.session_state.templates[template_selecionado]
-                    df_base = st.session_state.df_editado.copy()
-                    
-                    df_mensal, df_cumulativo = processar_relatorio(df_base, template)
-                    
-                    st.session_state.relatorio_final = df_mensal
-                    st.session_state.relatorio_cumulativo = df_cumulativo
-                    st.session_state.col_agrupamento = template["colunas_agrupamento"]
-                    st.success("Tabelas Mensal e Cumulativa geradas com sucesso!")
-                except Exception as e:
-                    st.error(f"Erro ao processar: {e}")
-
-        if st.session_state.relatorio_final is not None:
-            st.divider()
-            st.markdown("### 🔍 Filtros em Cascata")
-            st.markdown("Selecione opções abaixo para filtrar os detalhes. Os totais atualizarão automaticamente.")
+    elif st.session_state.relatorio_final is not None:
+        st.markdown("#### 🔍 Filtros em Cascata")
+        st.markdown("Selecione opções abaixo para filtrar os detalhes. Os totais atualizarão automaticamente.")
             
             rel_display = st.session_state.relatorio_final.copy()
             rel_cumul_display = st.session_state.relatorio_cumulativo.copy()
