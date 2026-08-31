@@ -376,7 +376,7 @@ elif pagina == PAGINAS[1]:
     if st.session_state.df_editado is None:
         st.warning("⚠️ Volte à primeira página e carregue um ficheiro Excel.")
     else:
-        st.subheader("🛠️ 1. Selecione ou Crie um Modelo/Template")
+        st.subheader("🛠️ 1. Selecione o Modelo/Template")
         
         lista_templates = list(st.session_state.templates.keys())
         
