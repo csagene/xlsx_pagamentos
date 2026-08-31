@@ -354,41 +354,7 @@ elif pagina == PAGINAS[1]:
             
         template_selecionado = st.selectbox("Selecione o Modelo/Template:", lista_templates)
         
-        with st.expander("➕ Criar Novo Template ou Editar Atual"):
-            col1, col2 = st.columns(2)
-            with col1:
-                novo_nome = st.text_input("Nome do Template (altere para criar um novo)", value=template_selecionado)
-                colunas_disponiveis = st.session_state.df_editado.columns.tolist()
-                agrupamento_atual = st.session_state.templates[template_selecionado]["colunas_agrupamento"]
-                todas_opcoes_agrup = list(set(colunas_disponiveis + agrupamento_atual))
-                
-                novo_agrupamento = st.multiselect(
-                    "Colunas de Agrupamento (Organização / Linhas):", 
-                    options=todas_opcoes_agrup,
-                    default=agrupamento_atual
-                )
-            with col2:
-                metricas_disponiveis = ["F", "M", "Sem_Gênero", "Benef. Distintos", "1x", "2x", "3x", "4+", "Pagamentos", "Valor Pago"]
-                metricas_atuais = st.session_state.templates[template_selecionado]["colunas_metricas"]
-                todas_opcoes_metr = list(set(metricas_disponiveis + metricas_atuais))
-                
-                novas_metricas = st.multiselect(
-                    "Colunas de Métricas (Cálculos / Valores):",
-                    options=todas_opcoes_metr,
-                    default=metricas_atuais
-                )
-            
-            if st.button("💾 Guardar Modelo", type="primary"):
-                if novo_nome:
-                    st.session_state.templates[novo_nome] = {
-                        "colunas_agrupamento": novo_agrupamento,
-                        "colunas_metricas": novas_metricas
-                    }
-                    guardar_templates(st.session_state.templates)
-                    st.success(f"✅ Template '{novo_nome}' guardado com sucesso!")
-                    st.rerun()
-                else:
-                    st.error("O nome do template não pode estar vazio.")
+
 
         st.divider()
         st.subheader("⚙️ 2. Gerar e Filtrar Relatório")
