@@ -60,19 +60,15 @@ PAGINAS = [
 if "pagina_atual" not in st.session_state:
     st.session_state.pagina_atual = PAGINAS[0]
 
-def ir_proximo():
-    idx = PAGINAS.index(st.session_state.pagina_atual)
-    if idx < len(PAGINAS) - 1:
-        st.session_state.pagina_atual = PAGINAS[idx + 1]
-
-def ir_anterior():
-    idx = PAGINAS.index(st.session_state.pagina_atual)
-    if idx > 0:
-        st.session_state.pagina_atual = PAGINAS[idx - 1]
-
 st.sidebar.title("🧭 Organização")
 st.sidebar.markdown("Navegue entre as páginas da aplicação:")
-pagina = st.sidebar.radio("", PAGINAS, key="pagina_atual")
+
+idx = PAGINAS.index(st.session_state.pagina_atual) if st.session_state.pagina_atual in PAGINAS else 0
+pagina = st.sidebar.radio("", PAGINAS, index=idx)
+
+if pagina != st.session_state.pagina_atual:
+    st.session_state.pagina_atual = pagina
+    st.rerun()
 
 st.sidebar.divider()
 if st.session_state.df_editado is not None:
