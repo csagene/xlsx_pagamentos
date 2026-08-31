@@ -1,0 +1,26 @@
+{
+    "modelo de tabela globalizadovf_final_xls": {
+        "colunas_agrupamento": [
+            "Ano ",
+            "Mês",
+            "Província",
+            "Delegação",
+            "Distrito",
+            "Fonte",
+            "Programa",
+            "Implementador",
+            "Provedor  servico"
+        ],
+        "colunas_metricas": [
+            "F",
+            "M",
+            "Benef. Distintos",
+            "1x",
+            "2x",
+            "3x",
+            "4+",
+            "Pagamentos",
+            "Valor Pago"
+        ]
+    }
+}
