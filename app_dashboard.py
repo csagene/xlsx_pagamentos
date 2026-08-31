@@ -282,7 +282,40 @@ def processar_relatorio(df, template):
             # Converter para string e remover '.0' de floats para não aparecer com vírgulas/decimais na UI
             relatorio_final[col] = relatorio_final[col].astype(str).str.replace(r'\.0$', '', regex=True).replace('nan', '')
             
-    return relatorio_final
+    df_mensal = relatorio_final.copy()
+    df_cumulativo = relatorio_final.copy()
+    
+    col_mes = None
+    for col in col_agrupamento:
+        if 'mes' in col.lower() or 'mês' in col.lower():
+            col_mes = col
+            break
+            
+    if col_mes:
+        def extract_num(val):
+            try:
+                import re
+                nums = re.findall(r'\d+', str(val))
+                return float(nums[0]) if nums else 0.0
+            except:
+                return 0.0
+                
+        df_cumulativo['_sort_mes'] = df_cumulativo[col_mes].apply(extract_num)
+        
+        col_agrup_sem_mes = [c for c in col_agrupamento if c != col_mes]
+        numeric_cols = [c for c in df_cumulativo.columns if c in col_metricas and pd.api.types.is_numeric_dtype(df_cumulativo[c])]
+        
+        # Ordenar pelos agrupamentos base e depois pelo mês, para o cumsum fazer sentido!
+        df_cumulativo = df_cumulativo.sort_values(by=col_agrup_sem_mes + ['_sort_mes'])
+        
+        df_cumulativo[numeric_cols] = df_cumulativo.groupby(col_agrup_sem_mes)[numeric_cols].cumsum()
+        df_cumulativo = df_cumulativo.drop(columns=['_sort_mes'])
+        
+        # Renomear adicionando _ACUM
+        rename_acum = {c: f"{c}_ACUM" for c in numeric_cols}
+        df_cumulativo = df_cumulativo.rename(columns=rename_acum)
+    
+    return df_mensal, df_cumulativo
 
 # =========================================================
 # PÁGINA 1: CARREGAR & EDITAR DADOS
@@ -364,11 +397,12 @@ elif pagina == PAGINAS[1]:
                     template = st.session_state.templates[template_selecionado]
                     df_base = st.session_state.df_editado.copy()
                     
-                    relatorio = processar_relatorio(df_base, template)
+                    df_mensal, df_cumulativo = processar_relatorio(df_base, template)
                     
-                    st.session_state.relatorio_final = relatorio
+                    st.session_state.relatorio_final = df_mensal
+                    st.session_state.relatorio_cumulativo = df_cumulativo
                     st.session_state.col_agrupamento = template["colunas_agrupamento"]
-                    st.success("Tabela gerada e guardada em memória!")
+                    st.success("Tabelas Mensal e Cumulativa geradas com sucesso!")
                 except Exception as e:
                     st.error(f"Erro ao processar: {e}")
 
@@ -378,6 +412,7 @@ elif pagina == PAGINAS[1]:
             st.markdown("Selecione opções abaixo para filtrar os detalhes. Os totais atualizarão automaticamente.")
             
             rel_display = st.session_state.relatorio_final.copy()
+            rel_cumul_display = st.session_state.relatorio_cumulativo.copy()
             
             filtros_aplicados = []
             if len(st.session_state.col_agrupamento) > 0:
@@ -408,12 +443,19 @@ elif pagina == PAGINAS[1]:
                                     lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
                                 )
                                 rel_display = rel_display[mask]
+                                
+                                mask_cumul = rel_cumul_display[col].astype(str).apply(
+                                    lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
+                                )
+                                rel_cumul_display = rel_cumul_display[mask_cumul]
                             else:
                                 rel_display = rel_display[rel_display[col].astype(str).isin(selecao)]
+                                rel_cumul_display = rel_cumul_display[rel_cumul_display[col].astype(str).isin(selecao)]
                                 
                             filtros_aplicados.append(f"**{col}:** {', '.join(selecao)}")
                             
             st.session_state.relatorio_filtrado = rel_display
+            st.session_state.relatorio_cumul_filtrado = rel_cumul_display
             st.session_state.filtros_aplicados_texto = filtros_aplicados
             
             rel_display_com_totais = adicionar_linha_totais(rel_display, st.session_state.col_agrupamento)
@@ -438,27 +480,44 @@ elif pagina == PAGINAS[1]:
                     return str(val)
                     
             format_dict = {col: format_mt for col in rel_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
+            format_dict_cumul = {col: format_mt for col in rel_cumul_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
             
-            styled_display = rel_display.style.format(format_dict)
-            styled_totais = df_totais_so.style.apply(destacar_totais_isolados, axis=1).format(format_dict).hide(axis="index")
+            tab1, tab2 = st.tabs(["📊 Tabela 1 — PAGAMENTOS MENSAL", "📈 Tabela 2 — PAGAMENTOS CUMULATIVO"])
             
-            st.subheader("Tabela de Resultados (De acordo com o Template)")
-            
-            st.dataframe(styled_display, height=400, use_container_width=False, hide_index=True)
-            
-            st.write("📌 **TOTAIS GERAIS DOS DADOS ACIMA:**")
-            st.dataframe(styled_totais, use_container_width=False, hide_index=True)
-            
-            buffer = io.BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                rel_display_com_totais.to_excel(writer, index=False, sheet_name='Relatorio_INAS')
-            
-            st.download_button(
-                label="📥 Exportar Esta Tabela para Excel",
-                data=buffer.getvalue(),
-                file_name="relatorio_final_detalhado.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            with tab1:
+                styled_display = rel_display.style.format(format_dict)
+                styled_totais = df_totais_so.style.apply(destacar_totais_isolados, axis=1).format(format_dict).hide(axis="index")
+                
+                st.dataframe(styled_display, height=400, use_container_width=True, hide_index=True)
+                st.write("📌 **TOTAIS GERAIS DOS DADOS ACIMA:**")
+                st.dataframe(styled_totais, use_container_width=True, hide_index=True)
+                
+                buffer1 = io.BytesIO()
+                with pd.ExcelWriter(buffer1, engine='openpyxl') as writer:
+                    rel_display_com_totais.to_excel(writer, index=False, sheet_name='PAGAMENTOS_MENSAL')
+                
+                st.download_button(
+                    label="📥 Descarregar Tabela 1 (Mensal)",
+                    data=buffer1.getvalue(),
+                    file_name="PAGAMENTOS_MENSAL.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+            with tab2:
+                styled_cumul = rel_cumul_display.style.format(format_dict_cumul)
+                st.dataframe(styled_cumul, height=400, use_container_width=True, hide_index=True)
+                st.info("ℹ️ A tabela cumulativa soma os valores progressivamente, respondendo: 'Até este mês, quanto já foi pago?'")
+                
+                buffer2 = io.BytesIO()
+                with pd.ExcelWriter(buffer2, engine='openpyxl') as writer:
+                    rel_cumul_display.to_excel(writer, index=False, sheet_name='PAGAMENTOS_CUMULATIVO')
+                
+                st.download_button(
+                    label="📥 Descarregar Tabela 2 (Cumulativo)",
+                    data=buffer2.getvalue(),
+                    file_name="PAGAMENTOS_CUMULATIVO.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
 # =========================================================
 # PÁGINA 3: DASHBOARD VISUAL
