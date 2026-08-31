@@ -391,114 +391,114 @@ elif pagina == PAGINAS[1]:
     elif st.session_state.relatorio_final is not None:
         st.markdown("#### 🔍 Filtros em Cascata")
         st.markdown("Selecione opções abaixo para filtrar os detalhes. Os totais atualizarão automaticamente.")
-            
-            rel_display = st.session_state.relatorio_final.copy()
-            rel_cumul_display = st.session_state.relatorio_cumulativo.copy()
-            
-            filtros_aplicados = []
-            if len(st.session_state.col_agrupamento) > 0:
-                # Criar um grid de 4 colunas horizontais
-                col_filtros = st.columns(4)
-                for i, col in enumerate(st.session_state.col_agrupamento):
-                    # Distribuir os filtros de forma equitativa pelas colunas
-                    with col_filtros[i % 4]:
-                        is_mes = "mes" in str(col).lower() or "mês" in str(col).lower()
-                        
-                        if is_mes:
-                            opcoes_brutas = rel_display[col].astype(str).dropna().tolist()
-                            opcoes_lista = []
-                            for op in opcoes_brutas:
-                                opcoes_lista.extend([m.strip() for m in op.split(',') if m.strip() and m.strip() != "N/D"])
-                            try:
-                                opcoes = sorted(list(set(opcoes_lista)), key=float)
-                            except:
-                                opcoes = sorted(list(set(opcoes_lista)))
-                        else:
-                            opcoes = sorted(list(rel_display[col].astype(str).dropna().unique()))
-                            
-                        selecao = st.multiselect(f"Filtrar por {col}:", opcoes)
-                        
-                        if selecao:
-                            if is_mes:
-                                mask = rel_display[col].astype(str).apply(
-                                    lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
-                                )
-                                rel_display = rel_display[mask]
-                                
-                                mask_cumul = rel_cumul_display[col].astype(str).apply(
-                                    lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
-                                )
-                                rel_cumul_display = rel_cumul_display[mask_cumul]
-                            else:
-                                rel_display = rel_display[rel_display[col].astype(str).isin(selecao)]
-                                rel_cumul_display = rel_cumul_display[rel_cumul_display[col].astype(str).isin(selecao)]
-                                
-                            filtros_aplicados.append(f"**{col}:** {', '.join(selecao)}")
-                            
-            st.session_state.relatorio_filtrado = rel_display
-            st.session_state.relatorio_cumul_filtrado = rel_cumul_display
-            st.session_state.filtros_aplicados_texto = filtros_aplicados
-            
-            rel_display_com_totais = adicionar_linha_totais(rel_display, st.session_state.col_agrupamento)
-            num_totais = len(rel_display_com_totais) - len(rel_display)
-            df_totais_so = rel_display_com_totais.tail(num_totais)
-            
-            def destacar_totais_isolados(row):
-                # A primeira coluna (iloc[0]) agora é 'Totais'
-                is_geral = (row.iloc[0] == "TOTAL GERAL")
-                if is_geral:
-                    return ['font-weight: bold; background-color: #ffe6e6; border-top: 2px solid black'] * len(row)
-                else:
-                    return [''] * len(row)
-            
-            def format_mt(val):
-                if pd.isna(val) or val == "": return ""
-                try:
-                    s = f"{float(val):,.2f}"
-                    s = s.replace(",", "X").replace(".", ",").replace("X", " ")
-                    return f"{s} MT"
-                except:
-                    return str(val)
+        
+        rel_display = st.session_state.relatorio_final.copy()
+        rel_cumul_display = st.session_state.relatorio_cumulativo.copy()
+        
+        filtros_aplicados = []
+        if len(st.session_state.col_agrupamento) > 0:
+            # Criar um grid de 4 colunas horizontais
+            col_filtros = st.columns(4)
+            for i, col in enumerate(st.session_state.col_agrupamento):
+                # Distribuir os filtros de forma equitativa pelas colunas
+                with col_filtros[i % 4]:
+                    is_mes = "mes" in str(col).lower() or "mês" in str(col).lower()
                     
-            format_dict = {col: format_mt for col in rel_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
-            format_dict_cumul = {col: format_mt for col in rel_cumul_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
+                    if is_mes:
+                        opcoes_brutas = rel_display[col].astype(str).dropna().tolist()
+                        opcoes_lista = []
+                        for op in opcoes_brutas:
+                            opcoes_lista.extend([m.strip() for m in op.split(',') if m.strip() and m.strip() != "N/D"])
+                        try:
+                            opcoes = sorted(list(set(opcoes_lista)), key=float)
+                        except:
+                            opcoes = sorted(list(set(opcoes_lista)))
+                    else:
+                        opcoes = sorted(list(rel_display[col].astype(str).dropna().unique()))
+                        
+                    selecao = st.multiselect(f"Filtrar por {col}:", opcoes)
+                    
+                    if selecao:
+                        if is_mes:
+                            mask = rel_display[col].astype(str).apply(
+                                lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
+                            )
+                            rel_display = rel_display[mask]
+                            
+                            mask_cumul = rel_cumul_display[col].astype(str).apply(
+                                lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
+                            )
+                            rel_cumul_display = rel_cumul_display[mask_cumul]
+                        else:
+                            rel_display = rel_display[rel_display[col].astype(str).isin(selecao)]
+                            rel_cumul_display = rel_cumul_display[rel_cumul_display[col].astype(str).isin(selecao)]
+                            
+                        filtros_aplicados.append(f"**{col}:** {', '.join(selecao)}")
+                        
+        st.session_state.relatorio_filtrado = rel_display
+        st.session_state.relatorio_cumul_filtrado = rel_cumul_display
+        st.session_state.filtros_aplicados_texto = filtros_aplicados
+        
+        rel_display_com_totais = adicionar_linha_totais(rel_display, st.session_state.col_agrupamento)
+        num_totais = len(rel_display_com_totais) - len(rel_display)
+        df_totais_so = rel_display_com_totais.tail(num_totais)
+        
+        def destacar_totais_isolados(row):
+            # A primeira coluna (iloc[0]) agora é 'Totais'
+            is_geral = (row.iloc[0] == "TOTAL GERAL")
+            if is_geral:
+                return ['font-weight: bold; background-color: #ffe6e6; border-top: 2px solid black'] * len(row)
+            else:
+                return [''] * len(row)
+        
+        def format_mt(val):
+            if pd.isna(val) or val == "": return ""
+            try:
+                s = f"{float(val):,.2f}"
+                s = s.replace(",", "X").replace(".", ",").replace("X", " ")
+                return f"{s} MT"
+            except:
+                return str(val)
+                
+        format_dict = {col: format_mt for col in rel_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
+        format_dict_cumul = {col: format_mt for col in rel_cumul_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
+        
+        tab1, tab2 = st.tabs(["📊 Tabela 1 — PAGAMENTOS MENSAL", "📈 Tabela 2 — PAGAMENTOS CUMULATIVO"])
+        
+        with tab1:
+            styled_display = rel_display.style.format(format_dict)
+            styled_totais = df_totais_so.style.apply(destacar_totais_isolados, axis=1).format(format_dict).hide(axis="index")
             
-            tab1, tab2 = st.tabs(["📊 Tabela 1 — PAGAMENTOS MENSAL", "📈 Tabela 2 — PAGAMENTOS CUMULATIVO"])
+            st.dataframe(styled_display, height=400, use_container_width=True, hide_index=True)
+            st.write("📌 **TOTAIS GERAIS DOS DADOS ACIMA:**")
+            st.dataframe(styled_totais, use_container_width=True, hide_index=True)
             
-            with tab1:
-                styled_display = rel_display.style.format(format_dict)
-                styled_totais = df_totais_so.style.apply(destacar_totais_isolados, axis=1).format(format_dict).hide(axis="index")
-                
-                st.dataframe(styled_display, height=400, use_container_width=True, hide_index=True)
-                st.write("📌 **TOTAIS GERAIS DOS DADOS ACIMA:**")
-                st.dataframe(styled_totais, use_container_width=True, hide_index=True)
-                
-                buffer1 = io.BytesIO()
-                with pd.ExcelWriter(buffer1, engine='openpyxl') as writer:
-                    rel_display_com_totais.to_excel(writer, index=False, sheet_name='PAGAMENTOS_MENSAL')
-                
-                st.download_button(
-                    label="📥 Descarregar Tabela 1 (Mensal)",
-                    data=buffer1.getvalue(),
-                    file_name="PAGAMENTOS_MENSAL.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            buffer1 = io.BytesIO()
+            with pd.ExcelWriter(buffer1, engine='openpyxl') as writer:
+                rel_display_com_totais.to_excel(writer, index=False, sheet_name='PAGAMENTOS_MENSAL')
+            
+            st.download_button(
+                label="📥 Descarregar Tabela 1 (Mensal)",
+                data=buffer1.getvalue(),
+                file_name="PAGAMENTOS_MENSAL.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-            with tab2:
-                styled_cumul = rel_cumul_display.style.format(format_dict_cumul)
-                st.dataframe(styled_cumul, height=400, use_container_width=True, hide_index=True)
-                st.info("ℹ️ A tabela cumulativa soma os valores progressivamente, respondendo: 'Até este mês, quanto já foi pago?'")
-                
-                buffer2 = io.BytesIO()
-                with pd.ExcelWriter(buffer2, engine='openpyxl') as writer:
-                    rel_cumul_display.to_excel(writer, index=False, sheet_name='PAGAMENTOS_CUMULATIVO')
-                
-                st.download_button(
-                    label="📥 Descarregar Tabela 2 (Cumulativo)",
-                    data=buffer2.getvalue(),
-                    file_name="PAGAMENTOS_CUMULATIVO.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+        with tab2:
+            styled_cumul = rel_cumul_display.style.format(format_dict_cumul)
+            st.dataframe(styled_cumul, height=400, use_container_width=True, hide_index=True)
+            st.info("ℹ️ A tabela cumulativa soma os valores progressivamente, respondendo: 'Até este mês, quanto já foi pago?'")
+            
+            buffer2 = io.BytesIO()
+            with pd.ExcelWriter(buffer2, engine='openpyxl') as writer:
+                rel_cumul_display.to_excel(writer, index=False, sheet_name='PAGAMENTOS_CUMULATIVO')
+            
+            st.download_button(
+                label="📥 Descarregar Tabela 2 (Cumulativo)",
+                data=buffer2.getvalue(),
+                file_name="PAGAMENTOS_CUMULATIVO.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
 # =========================================================
 # PÁGINA 3: DASHBOARD VISUAL
