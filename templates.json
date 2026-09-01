@@ -1,26 +1,34 @@
 {
     "modelo de tabela globalizadovf_final_xls": {
         "colunas_agrupamento": [
-            "Ano ",
-            "Mês",
-            "Província",
-            "Delegação",
-            "Distrito",
-            "Fonte",
-            "Programa",
-            "Implementador",
-            "Provedor  servico"
+            "ANO",
+            "MES",
+            "PROVINCIA",
+            "DELEGACAO",
+            "DISTRITO",
+            "FONTE",
+            "PROGRAMA",
+            "IMPLEMENTADOR",
+            "PROVEDOR_SERVICO"
         ],
         "colunas_metricas": [
             "F",
             "M",
-            "Benef. Distintos",
-            "1x",
-            "2x",
-            "3x",
-            "4+",
-            "Pagamentos",
-            "Valor Pago"
+            "BENEF_DISTINTOS",
+            "1X",
+            "2X",
+            "3X",
+            "4X",
+            "5X",
+            "6X",
+            "7X",
+            "8X",
+            "9X",
+            "10X",
+            "11X",
+            "12X",
+            "PAGAMENTOS",
+            "VALOR_PAGO"
         ]
     }
 }
