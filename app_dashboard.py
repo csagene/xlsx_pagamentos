@@ -175,7 +175,7 @@ if st.session_state.df_editado is not None:
 else:
     st.sidebar.warning("⚠️ Nenhum dado carregado")
     
-if st.sidebar.button("🔄 Limpar Cache / Recarregar App", width="stretch"):
+if st.sidebar.button("🔄 Limpar Cache / Recarregar App", width="stretch", type="primary"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()
