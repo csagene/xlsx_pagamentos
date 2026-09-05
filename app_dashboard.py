@@ -1096,17 +1096,6 @@ elif pagina == PAGINAS[1]:
                             
                             if selecao:
                                 if is_mes:
-                                    mask_mensal = rel_display[col].astype(str).apply(
-                                        lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
-                                    )
-                                    rel_display = rel_display[mask_mensal]
-                                    
-                                    if df_bruto_mensal is not None:
-                                        mask_bruto_mensal = df_bruto_mensal[col].astype(str).apply(
-                                            lambda x: any(sel in [m.strip() for m in x.split(',')] for sel in selecao)
-                                        )
-                                        df_bruto_mensal = df_bruto_mensal[mask_bruto_mensal]
-                                    
                                     def _extract_mes(val_s):
                                         try:
                                             import re
@@ -1121,6 +1110,18 @@ elif pagina == PAGINAS[1]:
                                             return 0.0
                                             
                                     max_mes = max([_extract_mes(s) for s in selecao]) if selecao else 12
+                                    
+                                    mask_mensal = rel_display[col].astype(str).apply(
+                                        lambda x: 0 < _extract_mes(x) <= max_mes
+                                    )
+                                    rel_display = rel_display[mask_mensal]
+                                    
+                                    if df_bruto_mensal is not None:
+                                        mask_bruto_mensal = df_bruto_mensal[col].astype(str).apply(
+                                            lambda x: 0 < _extract_mes(x) <= max_mes
+                                        )
+                                        df_bruto_mensal = df_bruto_mensal[mask_bruto_mensal]
+                                    
                                     mask_cumul = rel_cumul_display[col].astype(str).apply(
                                         lambda x: 0 < _extract_mes(x) <= max_mes
                                     )
