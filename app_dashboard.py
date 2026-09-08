@@ -960,8 +960,8 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     
                     if st.session_state.get('modelo_selecionado') in ["INAS", "GIVE", "PMA"]:
                         template = template.copy()
-                        template["colunas_agrupamento"] = ["Ano ", "Mês"]
-                        template["colunas_string_join"] = ["Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico"]
+                        template["colunas_agrupamento"] = ["Ano ", "Mês", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico"]
+                        template["colunas_string_join"] = []
                         template["colunas_metricas"] = ["F", "M", "Benef. Distintos", "1X", "2X", "3X", "4X", "5X", "6X", "7X", "8X", "9X", "10X", "11X", "12X", "Pagamentos", "Valor Pago"]
                     
                     df_mensal, df_cumulativo, df_bruto_mapeado, meta_info = processar_relatorio(st.session_state.df_editado.copy(), template)
