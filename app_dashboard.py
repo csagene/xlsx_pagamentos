@@ -228,9 +228,9 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
                 if "benef" in c_lower:
                     t_geral[col] = df_bruto[col_b].nunique()
                 elif (val.startswith('F') or val.startswith('F_ACUM')) and col_s:
-                    t_geral[col] = df_bruto[df_bruto[col_s].astype(str).str.upper().str.startswith('F')][col_b].nunique()
+                    t_geral[col] = df_bruto[df_bruto[col_s].astype(str).str.strip().str.upper().str.slice(0, 1).isin(['F', 'E', '1'])][col_b].nunique()
                 elif (val.startswith('M') or val.startswith('M_ACUM')) and col_s:
-                    t_geral[col] = df_bruto[df_bruto[col_s].astype(str).str.upper().str.startswith('M')][col_b].nunique()
+                    t_geral[col] = df_bruto[df_bruto[col_s].astype(str).str.strip().str.upper().str.slice(0, 1).isin(['M', 'H'])][col_b].nunique()
             else:
                 if is_cumulativo:
                     if col_mes:
@@ -491,16 +491,24 @@ def processar_relatorio(df, template):
     
     if col_sexo:
         df_sexo_base = df.copy()
-        df_sexo_base[col_sexo] = df_sexo_base[col_sexo].fillna("SEM_GENERO").replace("", "SEM_GENERO")
+        
+        def normalizar_sexo(s):
+            s = str(s).strip().upper()
+            if not s or s == "NAN": return "SEM_GENERO"
+            if s[0] in ['F', 'E', '1']: return 'F'
+            if s[0] in ['M', 'H']: return 'M'
+            return s
+            
+        df_sexo_base[col_sexo] = df_sexo_base[col_sexo].apply(normalizar_sexo)
         agrupamento_sexo = list(dict.fromkeys(col_agrupamento_reais + [col_beneficiario, col_sexo]))
         df_sexo = df_sexo_base.drop_duplicates(subset=agrupamento_sexo)
         sexo_pivot = pd.pivot_table(df_sexo, index=col_agrupamento_reais, columns=col_sexo, values=col_beneficiario, aggfunc='nunique', fill_value=0)
         
         for sexo_col in sexo_pivot.columns:
             val = str(sexo_col).strip().upper()
-            if val.startswith('F'):
+            if val == 'F':
                 resumo_basico['F'] = sexo_pivot[sexo_col]
-            elif val.startswith('M'):
+            elif val == 'M':
                 resumo_basico['M'] = sexo_pivot[sexo_col]
             else:
                 nome_col = f"Sexo_{val}" if val != "SEM_GENERO" else "Sem_Gênero"
@@ -602,8 +610,8 @@ def processar_relatorio(df, template):
                     
                     if col_sexo:
                         s = str(row[col_sexo]).strip().upper()
-                        if s.startswith('F'): benef_vistos_F.add(b)
-                        elif s.startswith('M'): benef_vistos_M.add(b)
+                        if s and s[0] in ['F', 'E', '1']: benef_vistos_F.add(b)
+                        elif s and s[0] in ['M', 'H']: benef_vistos_M.add(b)
                         
                 row_dict = dict(base_row)
                 row_dict[col_mes_final] = nome_mes
