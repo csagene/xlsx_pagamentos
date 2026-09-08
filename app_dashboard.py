@@ -29,45 +29,50 @@ st.markdown('''
     }
 
     /* ===== SPINNER NATIVO BLOQUEANTE (FULL-PAGE) ===== */
-    /* Quando o Streamlit activa o st.spinner, mostramos a todo o ecrã */
     div[data-testid="stSpinner"] {
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
         width: 100vw !important;
         height: 100vh !important;
-        background: rgba(0, 0, 0, 0.65) !important;
+        background: rgba(0, 0, 0, 0.5) !important;
         backdrop-filter: blur(4px) !important;
-        z-index: 999999 !important;
+        z-index: 9999999 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
     div[data-testid="stSpinner"] > div {
-        background: #1e1e2e !important;
-        padding: 40px 60px !important;
-        border-radius: 16px !important;
-        box-shadow: 0 25px 60px rgba(0,0,0,0.5) !important;
-        color: white !important;
+        background: #ffffff !important;
+        padding: 15px 25px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3) !important;
         display: flex !important;
-        flex-direction: column !important;
+        flex-direction: row !important;
         align-items: center !important;
+        justify-content: center !important;
         gap: 15px !important;
+        width: fit-content !important;
+        max-width: 80vw !important;
+        margin: auto !important;
+        border: 1px solid #eee !important;
     }
     
-    /* Aumentar um pouco o círculo animado */
     div[data-testid="stSpinner"] > div > div:first-child {
-        transform: scale(1.5) !important;
-        margin-bottom: 10px !important;
+        transform: scale(1.3) !important;
+        margin: 0 !important;
     }
     
-    div[data-testid="stSpinner"] p {
-        color: #e0e0ff !important;
-        font-size: 1.1rem !important;
-        font-weight: 500 !important;
-        letter-spacing: 0.03em !important;
+    div[data-testid="stSpinner"] p, 
+    div[data-testid="stSpinner"] div[data-testid="stMarkdownContainer"] {
+        color: #222222 !important;
+        font-size: 1.15rem !important;
+        font-weight: 600 !important;
         margin: 0 !important;
+        padding: 0 !important;
     }
     /* ====================================== */
     </style>
@@ -190,8 +195,7 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
             col_impl = col
         if "mes" in c_lower or "mês" in c_lower:
             col_mes = col
-            
-    val_impl = "PMA" if st.session_state.get("modelo_selecionado") == "PMA" else ("" if st.session_state.get("modelo_selecionado") == "INAS" else "INAS")
+    val_impl = "PMA" if st.session_state.get("modelo_selecionado") == "PMA" else "INAS"
     if col_impl:
         df_resultado[col_impl] = val_impl
         
@@ -436,7 +440,13 @@ def processar_relatorio(df, template):
         df[col_pagamentos_raw] = pd.to_numeric(df[col_pagamentos_raw], errors='coerce').fillna(1).astype(int)
         agg_pag = pd.NamedAgg(column=col_pagamentos_raw, aggfunc='sum')
     else:
-        agg_pag = pd.NamedAgg(column=col_beneficiario, aggfunc='count')
+        col_meses_multiplos = detetar_coluna(colunas_df, ['meses_pagamento', 'meses_pagos', 'mes_pagamento', 'meses pagamentos', 'meses pago'])
+        if col_meses_multiplos:
+            df['_n_pagamentos_calc'] = df[col_meses_multiplos].apply(lambda x: len([m for m in str(x).split(',') if m.strip()]) if pd.notna(x) and str(x).strip() != "" else 1)
+            col_pagamentos_raw = '_n_pagamentos_calc'
+            agg_pag = pd.NamedAgg(column=col_pagamentos_raw, aggfunc='sum')
+        else:
+            agg_pag = pd.NamedAgg(column=col_beneficiario, aggfunc='count')
         
     agg_dict = {
         'PAGAMENTOS': agg_pag,
@@ -566,6 +576,7 @@ def processar_relatorio(df, template):
             freq_benef = {}
             acum_pagamentos = 0
             acum_valor = 0
+            acum_strings = {c: set() for c in colunas_string_join}
             
             chaves_tuple = chaves if isinstance(chaves, tuple) else (chaves,)
             base_row = dict(zip(col_agrup_sem_mes_finais, chaves_tuple))
@@ -607,7 +618,11 @@ def processar_relatorio(df, template):
                 if not matched.empty:
                     for c in colunas_string_join:
                         if c in matched.columns:
-                            row_dict[c] = matched.iloc[0][c]
+                            val = str(matched.iloc[0][c])
+                            for part in val.split(","):
+                                if part.strip():
+                                    acum_strings[c].add(part.strip())
+                            row_dict[c] = ", ".join(sorted(acum_strings[c]))
                             
                 row_dict['Pagamentos'] = acum_pagamentos
                 row_dict['Valor Pago'] = acum_valor
@@ -920,6 +935,10 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         # Forçar Implementador e Provedor
                         df['Implementador'] = 'PMA'
                         df['Provedor'] = 'Mpesa'
+                        
+                    if modelo_selecionado == "INAS":
+                        df['Implementador'] = 'INAS'
+                        df['Fonte'] = ''
                     # -----------------------------
                     
                     st.session_state.df = df
@@ -935,8 +954,8 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     
                     if st.session_state.get('modelo_selecionado') in ["INAS", "GIVE", "PMA"]:
                         template = template.copy()
-                        template["colunas_agrupamento"] = ["Ano ", "Mês", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico"]
-                        template["colunas_string_join"] = []
+                        template["colunas_agrupamento"] = ["Ano ", "Mês"]
+                        template["colunas_string_join"] = ["Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico"]
                         template["colunas_metricas"] = ["F", "M", "Benef. Distintos", "1X", "2X", "3X", "4X", "5X", "6X", "7X", "8X", "9X", "10X", "11X", "12X", "Pagamentos", "Valor Pago"]
                     
                     df_mensal, df_cumulativo, df_bruto_mapeado, meta_info = processar_relatorio(st.session_state.df_editado.copy(), template)
@@ -984,8 +1003,8 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             df_cumulativo["Fonte"] = "GIVE"
                             df_mensal["Fonte"] = "GIVE"
                         else:
-                            df_cumulativo["Fonte"] = "INAS"
-                            df_mensal["Fonte"] = "INAS"
+                            df_cumulativo["Fonte"] = ""
+                            df_mensal["Fonte"] = ""
                         
                         # Se for PMA, forçar o implementador e provedor (apenas no caso do template não o ter feito)
                         if st.session_state.get('modelo_selecionado') == "PMA":
@@ -993,11 +1012,14 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             df_mensal["Implementador"] = "PMA"
                             df_cumulativo["Provedor servico"] = "Mpesa"
                             df_mensal["Provedor servico"] = "Mpesa"
+                        elif st.session_state.get('modelo_selecionado') == "INAS":
+                            df_cumulativo["Implementador"] = "INAS"
+                            df_mensal["Implementador"] = "INAS"
                         else:
                             if "Implementador" not in df_cumulativo.columns or df_cumulativo["Implementador"].astype(str).str.strip().eq("").all():
                                 df_cumulativo["Implementador"] = ""
-                        if "Implementador" not in df_mensal.columns or df_mensal["Implementador"].astype(str).str.strip().eq("").all():
-                            df_mensal["Implementador"] = ""
+                            if "Implementador" not in df_mensal.columns or df_mensal["Implementador"].astype(str).str.strip().eq("").all():
+                                df_mensal["Implementador"] = ""
                         
                         if "Programa" in df_mensal.columns and df_mensal["Programa"].astype(str).str.strip().eq("").all():
                             df_mensal["Programa"] = "PSSB"
@@ -1042,29 +1064,12 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     st.session_state.meta_info = meta_info
                 except Exception as e:
                     st.error(f"Erro ao ler e processar o ficheiro: {e}")
-    else:
-        # Ficheiro foi removido pelo utilizador, limpar tudo
-        st.session_state.df_editado = None
-        st.session_state.relatorio_final = None
-        st.session_state.relatorio_cumulativo = None
-        st.session_state.relatorio_filtrado = None
-        st.session_state.relatorio_cumul_filtrado = None
-        st.session_state.last_file_name = None
-        st.session_state.filtros_aplicados_texto = []
-        st.session_state.pop("_erros_import", None)
-        st.session_state.pop("_arquivo_rejeitado", None)
-        st.session_state.pop("df_bruto_mapeado", None)
-        st.session_state.pop("meta_info", None)
+
                     
     if st.session_state.df_editado is not None:
         st.dataframe(st.session_state.df_editado, use_container_width=True, hide_index=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("Avançar para Relatórios ➡️", use_container_width=True, type="primary"):
-                st.session_state.pagina_atual = PAGINAS[1]
-                st.rerun()
 
 # =========================================================
 # PÁGINA 2: GERAR RELATÓRIO
@@ -1075,83 +1080,11 @@ elif pagina == PAGINAS[1]:
     if st.session_state.df_editado is None:
         st.warning("⚠️ Volte à primeira página e carregue um ficheiro Excel.")
     elif st.session_state.relatorio_final is not None:
-        with st.expander("🔍 Filtros de Relatório", expanded=True):
-            st.markdown("<span id='filters-sticky-hook'></span>", unsafe_allow_html=True)
-            rel_display = st.session_state.relatorio_final.copy()
-            rel_cumul_display = st.session_state.relatorio_cumulativo.copy()
-            df_bruto_mensal = st.session_state.df_bruto_mapeado.copy() if hasattr(st.session_state, 'df_bruto_mapeado') else None
-            df_bruto_cumul = st.session_state.df_bruto_mapeado.copy() if hasattr(st.session_state, 'df_bruto_mapeado') else None
-            meta_info = st.session_state.meta_info if hasattr(st.session_state, 'meta_info') else None
-        
-            filtros_aplicados = []
-            if len(st.session_state.col_agrupamento) > 0:
-                agrupamentos = st.session_state.col_agrupamento
-                cols_per_row = 3
-                
-                for i in range(0, len(agrupamentos), cols_per_row):
-                    row_cols = st.columns(cols_per_row)
-                    for j, col in enumerate(agrupamentos[i:i+cols_per_row]):
-                        with row_cols[j]:
-                            is_mes = "mes" in str(col).lower() or "mês" in str(col).lower()
-                            
-                            if is_mes:
-                                opcoes_brutas = rel_display[col].astype(str).dropna().tolist()
-                                opcoes_lista = []
-                                for op in opcoes_brutas:
-                                    opcoes_lista.extend([m.strip() for m in op.split(',') if m.strip() and m.strip() != "N/D"])
-                                try:
-                                    opcoes = sorted(list(set(opcoes_lista)), key=float)
-                                except:
-                                    opcoes = sorted(list(set(opcoes_lista)))
-                            else:
-                                opcoes = sorted(list(rel_display[col].astype(str).dropna().unique()))
-                                
-                            selecao = st.multiselect(f"{col}", opcoes, placeholder="Seleccionar...")
-                            
-                            if selecao:
-                                if is_mes:
-                                    def _extract_mes(val_s):
-                                        try:
-                                            import re
-                                            val_str = str(val_s).lower()
-                                            nums = re.findall(r'\d+', val_str)
-                                            if nums: return float(nums[0])
-                                            meses_map = {'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6, 'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12}
-                                            for mes_chave, num in meses_map.items():
-                                                if mes_chave in val_str: return float(num)
-                                            return 0.0
-                                        except:
-                                            return 0.0
-                                            
-                                    max_mes = max([_extract_mes(s) for s in selecao]) if selecao else 12
-                                    
-                                    # Para o relatório mensal, queremos EXATAMENTE os meses selecionados
-                                    mask_mensal = rel_display[col].astype(str).isin(selecao)
-                                    rel_display = rel_display[mask_mensal]
-                                    
-                                    if df_bruto_mensal is not None:
-                                        mask_bruto_mensal = df_bruto_mensal[col].astype(str).isin(selecao)
-                                        df_bruto_mensal = df_bruto_mensal[mask_bruto_mensal]
-                                    
-                                    mask_cumul = rel_cumul_display[col].astype(str).apply(
-                                        lambda x: 0 < _extract_mes(x) <= max_mes
-                                    )
-                                    rel_cumul_display = rel_cumul_display[mask_cumul]
-                                    
-                                    if df_bruto_cumul is not None:
-                                        mask_bruto_cumul = df_bruto_cumul[col].astype(str).apply(
-                                            lambda x: 0 < _extract_mes(x) <= max_mes
-                                        )
-                                        df_bruto_cumul = df_bruto_cumul[mask_bruto_cumul]
-                                else:
-                                    rel_display = rel_display[rel_display[col].astype(str).isin(selecao)]
-                                    rel_cumul_display = rel_cumul_display[rel_cumul_display[col].astype(str).isin(selecao)]
-                                    if df_bruto_mensal is not None:
-                                        df_bruto_mensal = df_bruto_mensal[df_bruto_mensal[col].astype(str).isin(selecao)]
-                                    if df_bruto_cumul is not None:
-                                        df_bruto_cumul = df_bruto_cumul[df_bruto_cumul[col].astype(str).isin(selecao)]
-                                    
-                                filtros_aplicados.append(f"**{col}:** {', '.join(selecao)}")
+        rel_display = st.session_state.relatorio_final.copy()
+        rel_cumul_display = st.session_state.relatorio_cumulativo.copy()
+        df_bruto_mensal = st.session_state.df_bruto_mapeado.copy() if hasattr(st.session_state, 'df_bruto_mapeado') else None
+        df_bruto_cumul = st.session_state.df_bruto_mapeado.copy() if hasattr(st.session_state, 'df_bruto_mapeado') else None
+        filtros_aplicados = []
         def _get_sort_mes_val(val_s):
             try:
                 import re
@@ -1176,14 +1109,14 @@ elif pagina == PAGINAS[1]:
             # 1. Ano
             if "Ano " in st.session_state.col_agrupamento:
                 sort_cols.append("Ano ")
-                asc_list.append(True)
+                asc_list.append(True) # Crescente
             elif "Ano" in st.session_state.col_agrupamento:
                 sort_cols.append("Ano")
-                asc_list.append(True)
+                asc_list.append(True) # Crescente
                 
             # 2. Mês (Cronológico Global)
             sort_cols.append('_sort_mes')
-            asc_list.append(True)
+            asc_list.append(True) # Crescente
             
             # 3. Restantes dimensões
             for c in st.session_state.col_agrupamento:
@@ -1263,6 +1196,22 @@ elif pagina == PAGINAS[1]:
             except:
                 pass
                 
+            # Autofit column widths
+            try:
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if cell.value:
+                                max_length = max(max_length, len(str(cell.value)))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 60) # Capped at 60 to prevent absurdly wide columns
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+            except:
+                pass
+                
             # Adicionar filtros numa aba separada se não existir
             if filtros and "Filtros" not in writer.sheets:
                 df_filtros = pd.DataFrame({"Filtros Aplicados": filtros})
@@ -1307,6 +1256,22 @@ elif pagina == PAGINAS[1]:
                 for c_idx, value in enumerate(row, start=1):
                     ws.cell(row=r_idx, column=c_idx, value=value)
                     
+            # Autofit column widths
+            try:
+                for column in ws.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if cell.value:
+                                max_length = max(max_length, len(str(cell.value)))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 60)
+                    ws.column_dimensions[column_letter].width = adjusted_width
+            except:
+                pass
+                    
             buffer = io.BytesIO()
             wb.save(buffer)
             buffer.seek(0)
@@ -1318,15 +1283,11 @@ elif pagina == PAGINAS[1]:
         tab1, tab2 = st.tabs(["📊 Tabela 1 — PAGAMENTOS MENSAL", "📈 Tabela 2 — PAGAMENTOS CUMULATIVO"])
         
         with tab1:
-            # Separating the UI view so the Totals row is fixed below the main scrollable table
-            styled_data = rel_display.style.format(format_dict).hide(axis="index")
-            styled_totais = rel_display_totais.style.apply(destacar_totais_isolados, axis=1).format(format_dict).hide(axis="index")
+            styled_data = rel_display_completo.style.apply(destacar_totais_isolados, axis=1).format(format_dict).hide(axis="index")
             
             modelo_titulo = st.session_state.get('modelo_selecionado', 'INAS')
-            st.write(f"📌 **{modelo_titulo}_Relatorio mensal (Dados):**")
+            st.write(f"📌 **{modelo_titulo}_Relatorio mensal:**")
             st.dataframe(styled_data, use_container_width=True, hide_index=True)
-            st.write("📌 **Totais (Mensal):**")
-            st.dataframe(styled_totais, use_container_width=True, hide_index=True)
             
             if st.session_state.get('modelo_selecionado') == "INAS":
                 template_path_mensal = r"C:\Users\administrator\Documents\xls_project\xlsx_pagamentos\INAS\Mensal.xlsx"
@@ -1358,14 +1319,11 @@ elif pagina == PAGINAS[1]:
                 # Rebuild format dict just in case any keys were renamed
                 format_dict_cumul = {col: format_dict_cumul.get(col) for col in rel_cumul_display_completo.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
                 
-            styled_data_cumul = rel_cumul_display.style.format(format_dict_cumul).hide(axis="index")
-            styled_totais_cumul = rel_cumul_totais.style.apply(destacar_totais_isolados, axis=1).format(format_dict_cumul).hide(axis="index")
+            styled_data_cumul = rel_cumul_display_completo.style.apply(destacar_totais_isolados, axis=1).format(format_dict_cumul).hide(axis="index")
             
             modelo_titulo = st.session_state.get('modelo_selecionado', 'INAS')
-            st.write(f"📌 **Acumulado_{modelo_titulo} (Dados):**")
+            st.write(f"📌 **Acumulado_{modelo_titulo}:**")
             st.dataframe(styled_data_cumul, use_container_width=True, hide_index=True)
-            st.write("📌 **Totais (Acumulado):**")
-            st.dataframe(styled_totais_cumul, use_container_width=True, hide_index=True)
             
             if st.session_state.get('modelo_selecionado') == "INAS":
                 template_path_cumulativo = r"C:\Users\administrator\Documents\xls_project\xlsx_pagamentos\INAS\cumulative_aggregated_payments_template.xlsx"
