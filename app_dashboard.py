@@ -211,8 +211,7 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
                 t_geral[col] = "TOTAL"
                 has_set_geral = True
             else:
-                unique_vals = [v for v in df_resultado[col].dropna().astype(str).unique() if v.strip() != ""]
-                t_geral[col] = ", ".join(unique_vals)
+                t_geral[col] = extract_unique_items(df_resultado[col])
         elif pd.api.types.is_numeric_dtype(df_resultado[col]) and not any(normalize_text(col) == normalize_text(c) for c in colunas_agrupamento):
             is_distinct = False
             c_lower = str(col).strip().lower()
@@ -245,8 +244,7 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
                     t_geral[col] = df_resultado[col].sum()
         else:
             if col not in t_geral:
-                unique_vals = [v for v in df_resultado[col].dropna().astype(str).unique() if v.strip() != ""]
-                t_geral[col] = ", ".join(unique_vals)
+                t_geral[col] = extract_unique_items(df_resultado[col])
             
     linhas_totais.append(t_geral)
     
