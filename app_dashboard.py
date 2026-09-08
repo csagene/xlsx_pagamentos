@@ -21,29 +21,9 @@ st.markdown('''
     section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] p,
     section[data-testid="stSidebar"] .stRadio label,
     section[data-testid="stSidebar"] div[role="radiogroup"] div { color: #f0f0f0 !important; }
-    .block-container { padding-bottom: 100px !important; padding-top: 1rem !important; }
-    div[data-testid="stHorizontalBlock"]:has(~ div #nav-buttons-hook) {
-        position: fixed; bottom: 0; left: 0; width: 100%;
-        background-color: var(--background-color); padding: 15px 30px; z-index: 999;
-        border-top: 1px solid var(--secondary-background-color); box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.05); margin: 0;
-    }
-    @media (min-width: 50.625rem) {
-        div[data-testid="stHorizontalBlock"]:has(~ div #nav-buttons-hook) { padding-left: 21rem; padding-right: 2rem; }
-    }
+    .block-container { padding-top: 1rem !important; }
     
-    /* Make the filters expander sticky at the top */
-    div[data-testid="stExpander"]:has(#filters-sticky-hook) {
-        position: sticky;
-        top: 0.5rem;
-        z-index: 99999;
-        background-color: var(--secondary-background-color);
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-        border-radius: 0.5rem;
-        overflow: visible !important;
-    }
-    div[data-testid="stExpander"]:has(#filters-sticky-hook) > div {
-        overflow: visible !important;
-    }
+    /* Make the filters expander behave normally */
     div[data-testid="stExpanderDetails"] {
         overflow: visible !important;
     }
@@ -175,7 +155,7 @@ if st.session_state.df_editado is not None:
 else:
     st.sidebar.warning("⚠️ Nenhum dado carregado")
     
-if st.sidebar.button("🔄 Limpar Cache / Recarregar App", width="stretch", type="primary"):
+if st.sidebar.button("🔄 Limpar Cache / Recarregar App", use_container_width=True, type="primary"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()
@@ -235,7 +215,7 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
             val = str(col).strip().upper()
             
             # Check if this column is a distinct counting metric
-            if "benef" in c_lower or val.startswith('F') or val.startswith('M') or val.endswith('X') or val.endswith('X_ACUM') or val.startswith('F_ACUM') or val.startswith('M_ACUM'):
+            if "benef" in c_lower or val.startswith('F') or val.startswith('M') or val.startswith('F_ACUM') or val.startswith('M_ACUM'):
                 is_distinct = True
                 
             if is_distinct and df_bruto is not None and meta is not None:
@@ -247,14 +227,6 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
                     t_geral[col] = df_bruto[df_bruto[col_s].astype(str).str.upper().str.startswith('F')][col_b].nunique()
                 elif (val.startswith('M') or val.startswith('M_ACUM')) and col_s:
                     t_geral[col] = df_bruto[df_bruto[col_s].astype(str).str.upper().str.startswith('M')][col_b].nunique()
-                elif val.endswith('X') or val.endswith('X_ACUM'):
-                    v_clean = val.replace("_ACUM", "")
-                    target_freq = int(v_clean.replace("X", ""))
-                    if 'vezes' in df_bruto.columns:
-                        max_freqs = df_bruto.groupby(col_b)['vezes'].max()
-                        t_geral[col] = (max_freqs == target_freq).sum()
-                    else:
-                        t_geral[col] = df_bruto[df_bruto['categoria_vezes'] == v_clean][col_b].nunique()
             else:
                 if is_cumulativo:
                     if col_mes:
@@ -286,6 +258,31 @@ def normalize_text(text):
     return text.lower().strip()
 
 def processar_relatorio(df, template):
+    # Priorizar Short_delegacao sobre Delegacao
+    colunas_norm = {normalize_text(c): c for c in df.columns}
+    if "short_delegacao" in colunas_norm:
+        col_short = colunas_norm["short_delegacao"]
+        for c_norm in ["delegacao", "delegação"]:
+            if c_norm in colunas_norm and colunas_norm[c_norm] != col_short:
+                df[colunas_norm[c_norm]] = df[col_short]
+
+    # Extrair Ano e Mês da 'data de actualizacao'
+    col_data = None
+    for c in df.columns:
+        c_norm = normalize_text(c)
+        if "data" in c_norm and ("actualizacao" in c_norm or "atualizacao" in c_norm or "actaulaizacao" in c_norm):
+            col_data = c
+            break
+            
+    if col_data:
+        try:
+            df['_dt'] = pd.to_datetime(df[col_data], errors='coerce')
+            df['Ano'] = df['_dt'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'N/D')
+            meses_pt = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
+            df['Mês'] = df['_dt'].dt.month.map(meses_pt).fillna('N/D')
+        except:
+            pass
+
     colunas_df = df.columns.tolist()
     col_agrupamento = template["colunas_agrupamento"]
     col_metricas = template["colunas_metricas"]
@@ -297,7 +294,7 @@ def processar_relatorio(df, template):
         "ano": ["ano_pagamento", "ano", "year"],
         "mês": ["meses_pagamento", "mes", "mês", "meses", "month"],
         "província": ["provincia", "província", "province"],
-        "delegação": ["delegacao", "delegação"],
+        "delegação": ["delegacao", "delegação", "short_delegacao"],
         "distrito": ["distrito", "district"],
         "fonte": ["fonte_financiamento", "fonte", "source"],
         "programa": ["programa_social", "programa"],
@@ -499,13 +496,11 @@ def processar_relatorio(df, template):
                 nome_col = f"Sexo_{val}" if val != "SEM_GENERO" else "Sem_Gênero"
                 resumo_basico[nome_col] = sexo_pivot[sexo_col]
                 
-    # Abordagem 1: Frequência Progressiva (Parcelas)
-    df_freq = df.copy()
-    colunas_ordenacao = [c for c in col_agrupamento_reais if any(k in normalize_text(c) for k in ["ano", "mes", "mês", "data"])]
-    if colunas_ordenacao:
-        df_freq = df_freq.sort_values(by=colunas_ordenacao)
-        
-    df_freq['vezes'] = df_freq.groupby(col_beneficiario).cumcount() + 1
+    # Frequência Exata no Mês (Beneficiários com exatamente X pagamentos no mês)
+    if col_pagamentos_raw:
+        df_freq = df.groupby(col_agrupamento_reais + [col_beneficiario])[col_pagamentos_raw].sum().reset_index(name='vezes')
+    else:
+        df_freq = df.groupby(col_agrupamento_reais + [col_beneficiario]).size().reset_index(name='vezes')
     df_freq['categoria_vezes'] = df_freq['vezes'].astype(str) + 'X'
     freq_pivot = pd.pivot_table(df_freq, index=col_agrupamento_reais, columns='categoria_vezes', values=col_beneficiario, aggfunc='nunique', fill_value=0)
     
@@ -577,7 +572,11 @@ def processar_relatorio(df, template):
             
             for mes_sort, mes_grupo in grupo.groupby('_sort_mes'):
                 nome_mes = str(mes_grupo[col_mes_real].iloc[0])
-                acum_pagamentos += len(mes_grupo)
+                if col_pagamentos_raw:
+                    acum_pagamentos += mes_grupo[col_pagamentos_raw].sum()
+                else:
+                    acum_pagamentos += len(mes_grupo)
+                    
                 try:
                     acum_valor += pd.to_numeric(mes_grupo[col_valor], errors='coerce').fillna(0).sum()
                 except:
@@ -586,7 +585,9 @@ def processar_relatorio(df, template):
                 for idx, row in mes_grupo.iterrows():
                     b = str(row[col_beneficiario]).strip()
                     benef_vistos.add(b)
-                    freq_benef[b] = freq_benef.get(b, 0) + 1
+                    
+                    add_pag = row[col_pagamentos_raw] if col_pagamentos_raw else 1
+                    freq_benef[b] = freq_benef.get(b, 0) + add_pag
                     
                     if col_sexo:
                         s = str(row[col_sexo]).strip().upper()
@@ -709,16 +710,29 @@ def processar_relatorio(df, template):
                     
             numeric_cols = [c for c in df_cumulativo.columns if c in col_metricas and pd.api.types.is_numeric_dtype(df_cumulativo[c])]
             rename_acum = {c: f"{c}_ACUM" for c in numeric_cols}
+            rename_acum.update({
+                'Benef. Distintos': 'BENEF_DISTINTOS_ACUM',
+                'Pagamentos': 'PAGAMENTOS_ACUM',
+                'Valor Pago': 'VALOR_PAGO_ACUM',
+                'BENEF_DISTINTOS': 'BENEF_DISTINTOS_ACUM',
+                'PAGAMENTOS': 'PAGAMENTOS_ACUM',
+                'VALOR_PAGO': 'VALOR_PAGO_ACUM',
+                'F': 'F_ACUM',
+                'M': 'M_ACUM'
+            })
+            for i in range(1, 13):
+                rename_acum[f'{i}X'] = f'{i}X_ACUM'
+                rename_acum[f'{i}x'] = f'{i}X_ACUM'
             df_cumulativo = df_cumulativo.rename(columns=rename_acum)
         else:
             df_cumulativo = relatorio_final.copy()
     
-    df_freq_renomeado = df_freq.rename(columns=rename_dict)
+    df_bruto_renomeado = df.rename(columns=rename_dict)
     meta_info = {
         'col_beneficiario': rename_dict.get(col_beneficiario, col_beneficiario),
         'col_sexo': rename_dict.get(col_sexo, col_sexo) if col_sexo else None
     }
-    return df_mensal, df_cumulativo, df_freq_renomeado, meta_info
+    return df_mensal, df_cumulativo, df_bruto_renomeado, meta_info
 
 # =========================================================
 # PÁGINA 1: CARREGAR & EDITAR DADOS
@@ -1048,7 +1062,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("Avançar para Relatórios ➡️", width="stretch", type="primary"):
+            if st.button("Avançar para Relatórios ➡️", use_container_width=True, type="primary"):
                 st.session_state.pagina_atual = PAGINAS[1]
                 st.rerun()
 
@@ -1111,15 +1125,12 @@ elif pagina == PAGINAS[1]:
                                             
                                     max_mes = max([_extract_mes(s) for s in selecao]) if selecao else 12
                                     
-                                    mask_mensal = rel_display[col].astype(str).apply(
-                                        lambda x: 0 < _extract_mes(x) <= max_mes
-                                    )
+                                    # Para o relatório mensal, queremos EXATAMENTE os meses selecionados
+                                    mask_mensal = rel_display[col].astype(str).isin(selecao)
                                     rel_display = rel_display[mask_mensal]
                                     
                                     if df_bruto_mensal is not None:
-                                        mask_bruto_mensal = df_bruto_mensal[col].astype(str).apply(
-                                            lambda x: 0 < _extract_mes(x) <= max_mes
-                                        )
+                                        mask_bruto_mensal = df_bruto_mensal[col].astype(str).isin(selecao)
                                         df_bruto_mensal = df_bruto_mensal[mask_bruto_mensal]
                                     
                                     mask_cumul = rel_cumul_display[col].astype(str).apply(
@@ -1592,7 +1603,7 @@ col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
 
 with col1:
     if st.session_state.pagina_atual != PAGINAS[0]:
-        st.button("⬅️ Voltar", on_click=ir_anterior, width="stretch")
+        st.button("⬅️ Voltar", on_click=ir_anterior, use_container_width=True)
 
 with col5:
     if st.session_state.pagina_atual != PAGINAS[-1]:
@@ -1602,7 +1613,7 @@ with col5:
         elif st.session_state.pagina_atual == PAGINAS[1] and st.session_state.relatorio_final is None:
             pode_avancar = False
             
-        st.button("Avançar ➡️", on_click=ir_proximo, width="stretch", type="primary", disabled=not pode_avancar)
+        st.button("Avançar ➡️", on_click=ir_proximo, use_container_width=True, type="primary", disabled=not pode_avancar)
 
 
 st.markdown("<div id='nav-buttons-hook'></div>", unsafe_allow_html=True)
