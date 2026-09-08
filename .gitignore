@@ -4,3 +4,7 @@ __pycache__/
 INAS/
 old/
 ~$*
+*.xlsx
+*.csv
+app_dashboard_old*.py
+test_docs/
