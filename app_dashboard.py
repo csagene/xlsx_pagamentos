@@ -811,7 +811,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
     if "uploader_key" not in st.session_state:
         st.session_state.uploader_key = 0
         
-    uploaded_file = st.file_uploader("Carregue o ficheiro Excel", type=["xlsx", "xls"], key=f"uploader_{st.session_state.uploader_key}")
+    uploaded_file = st.file_uploader("Carregue o ficheiro Excel ou um ZIP contendo o Excel", type=["xlsx", "xls", "zip"], key=f"uploader_{st.session_state.uploader_key}")
     
     if uploaded_file is not None:
         current_file_id = getattr(uploaded_file, 'file_id', id(uploaded_file))
@@ -819,20 +819,77 @@ Por favor verifique se escolheu o modelo correto antes de importar.
         if st.session_state.get('last_file_id') != current_file_id and st.session_state.get('_arquivo_rejeitado') != file_model_key:
             with st.spinner("A analisar e processar o ficheiro..."):
                 try:
-                    uploaded_file.seek(0)
-                    df_preview = pd.read_excel(uploaded_file, header=None, nrows=30)
+                    import tempfile
+                    import os
+                    import zipfile
                     
-                    linha_cabecalho = 0
-                    for i, row in df_preview.iterrows():
-                        non_nulls = row.dropna()
-                        if len(non_nulls) >= 3:
-                            strings = [x for x in non_nulls if isinstance(x, str)]
-                            if len(strings) >= len(non_nulls) * 0.5:
-                                linha_cabecalho = i
-                                break
+                    ext = os.path.splitext(uploaded_file.name)[1].lower()
+                    if not ext: ext = '.xlsx'
                     
-                    uploaded_file.seek(0)
-                    df = pd.read_excel(uploaded_file, header=linha_cabecalho)
+                    # Salvar o ficheiro temporariamente no disco
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                        uploaded_file.seek(0)
+                        tmp.write(uploaded_file.read())
+                        tmp_path = tmp.name
+                    
+                    file_to_read = tmp_path
+                    temp_dir = None
+                    
+                    try:
+                        file_size = os.path.getsize(tmp_path)
+                        if file_size == 0:
+                            raise ValueError("O ficheiro carregado está vazio (0 bytes).")
+                            
+                        if ext == '.zip':
+                            temp_dir = tempfile.mkdtemp()
+                            with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+                                zip_ref.extractall(temp_dir)
+                            
+                            # Procurar o primeiro ficheiro xlsx ou xls dentro do zip
+                            for root, dirs, files in os.walk(temp_dir):
+                                for file in files:
+                                    if file.endswith('.xlsx') or file.endswith('.xls') or file.endswith('.csv'):
+                                        file_to_read = os.path.join(root, file)
+                                        break
+                                if file_to_read != tmp_path:
+                                    break
+                            
+                            if file_to_read == tmp_path:
+                                raise ValueError("Nenhum ficheiro Excel (.xlsx ou .xls) encontrado dentro do arquivo ZIP.")
+
+                        import zipfile
+                        is_valid_zip = zipfile.is_zipfile(file_to_read)
+                        
+                        if not is_valid_zip and file_to_read.endswith('.xlsx'):
+                            # Pode ser um CSV ou HTML com extensão errada, ou um ficheiro truncado
+                            try:
+                                df_preview = pd.read_csv(file_to_read, sep=None, engine='python', header=None, nrows=30)
+                                is_csv = True
+                            except:
+                                raise ValueError(f"O ficheiro não é um Excel válido (ZIP corrompido ou truncado no upload). Tamanho recebido: {file_size / (1024*1024):.2f} MB. Se for grande, reinicie o servidor.")
+                        else:
+                            df_preview = pd.read_excel(file_to_read, header=None, nrows=30)
+                            is_csv = False
+                        
+                        linha_cabecalho = 0
+                        for i, row in df_preview.iterrows():
+                            non_nulls = row.dropna()
+                            if len(non_nulls) >= 3:
+                                strings = [x for x in non_nulls if isinstance(x, str)]
+                                if len(strings) >= len(non_nulls) * 0.5:
+                                    linha_cabecalho = i
+                                    break
+                        
+                        if is_csv:
+                            df = pd.read_csv(file_to_read, sep=None, engine='python', header=linha_cabecalho)
+                        else:
+                            df = pd.read_excel(file_to_read, header=linha_cabecalho)
+                    finally:
+                        if os.path.exists(tmp_path):
+                            os.remove(tmp_path)
+                        if temp_dir and os.path.exists(temp_dir):
+                            import shutil
+                            shutil.rmtree(temp_dir)
                     
                     novas_colunas = []
                     vistos = {}
