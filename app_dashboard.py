@@ -371,6 +371,9 @@ def processar_relatorio(df, template):
     if not col_beneficiario: col_beneficiario = colunas_df[0]
     if not col_valor: col_valor = colunas_df[-1]
     
+    # Remover duplicados de beneficiários imediatamente após identificação, garantindo IDs distintos
+    df = df.drop_duplicates(subset=[col_beneficiario], keep='first').copy()
+    
     def clean_currency(val):
         if pd.isna(val): return 0.0
         if isinstance(val, (int, float)): return float(val)
