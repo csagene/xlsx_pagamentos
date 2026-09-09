@@ -794,7 +794,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
     # ------------------------------------
     
     modelos_disponiveis = ["INAS", "PMA", "GIVE"] # Outros modelos podem ser adicionados aqui no futuro
-    modelo_selecionado = st.selectbox("Selecione o Modelo a utilizar para os relatórios:", modelos_disponiveis)
+    modelo_selecionado = st.selectbox("Selecione o Modelo a utilizar para os relatórios:", modelos_disponiveis, key="modelo_selecionado_ui")
     
     if "uploader_key" not in st.session_state:
         st.session_state.uploader_key = 0
@@ -802,8 +802,9 @@ Por favor verifique se escolheu o modelo correto antes de importar.
     uploaded_file = st.file_uploader("Carregue o ficheiro Excel", type=["xlsx", "xls"], key=f"uploader_{st.session_state.uploader_key}")
     
     if uploaded_file is not None:
-        file_model_key = f"{uploaded_file.name}_{modelo_selecionado}"
-        if st.session_state.get('last_file_name') != uploaded_file.name and st.session_state.get('_arquivo_rejeitado') != file_model_key:
+        current_file_id = getattr(uploaded_file, 'file_id', id(uploaded_file))
+        file_model_key = f"{current_file_id}_{modelo_selecionado}"
+        if st.session_state.get('last_file_id') != current_file_id and st.session_state.get('_arquivo_rejeitado') != file_model_key:
             with st.spinner("A analisar e processar o ficheiro..."):
                 try:
                     uploaded_file.seek(0)
@@ -890,7 +891,12 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         st.session_state["_nome_modelo_erro"] = modelo_selecionado
                         st.session_state["_nome_ficheiro_erro"] = uploaded_file.name
                         st.session_state["_arquivo_rejeitado"] = file_model_key
-                        st.session_state.last_file_name = None  # bloquear re-import automático
+                        st.session_state.last_file_id = None  # bloquear re-import automático
+                        
+                        # Limpar completamente os dados existentes para não apresentar nada
+                        for key in ['df', 'df_editado', 'relatorio_final', 'df_mensal', 'df_cumulativo', 'df_totais']:
+                            if key in st.session_state:
+                                st.session_state[key] = None
                     # ----------------------------
                     
                     # Se validação falhou, interromper processamento
@@ -953,7 +959,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     st.session_state.df = df
                     st.session_state.df_editado = df.copy()
                     st.session_state.relatorio_final = None 
-                    st.session_state.last_file_name = uploaded_file.name
+                    st.session_state.last_file_id = current_file_id
                     st.session_state.modelo_selecionado = modelo_selecionado
                     
                     template_name = "modelo de tabela globalizadovf_final_xls"
