@@ -788,6 +788,18 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                 st.session_state.pop("_nome_modelo_erro", None)
                 st.session_state.pop("_nome_ficheiro_erro", None)
                 st.session_state.pop("_arquivo_rejeitado", None)
+                
+                # Limpar o cache completamente
+                if hasattr(st, 'cache_data'):
+                    st.cache_data.clear()
+                elif hasattr(st, 'legacy_caching'):
+                    st.legacy_caching.clear_cache()
+                
+                # Garantir limpeza absoluta dos dados do session_state
+                for key in ['df', 'df_editado', 'relatorio_final', 'df_mensal', 'df_cumulativo', 'df_totais', 'last_file_id', 'last_file_name']:
+                    if key in st.session_state:
+                        st.session_state[key] = None
+                        
                 st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
                 st.rerun()
         _popup_erro_import()
