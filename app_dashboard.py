@@ -500,6 +500,15 @@ def processar_relatorio(df, template):
             if s[0] in ['M', 'H']: return 'M'
             return s
             
+        mask_invalid = ~df_sexo_base[col_sexo].apply(lambda x: bool(str(x).strip().upper() and str(x).strip().upper() != "NAN" and str(x).strip().upper()[0] in ['F', 'E', '1', 'M', 'H']))
+        invalid_df = df_sexo_base[mask_invalid]
+        if not invalid_df.empty:
+            linhas_invalidas = (invalid_df.index + 2).tolist()
+            linhas_str = ", ".join(map(str, linhas_invalidas[:30]))
+            if len(linhas_invalidas) > 30:
+                linhas_str += f" (... e mais {len(linhas_invalidas) - 30} linhas)"
+            st.warning(f"⚠️ Atenção: Foram encontrados {len(linhas_invalidas)} registos com o campo de género vazio ou não reconhecido. Linhas (aprox.): {linhas_str}")
+            
         df_sexo_base[col_sexo] = df_sexo_base[col_sexo].apply(normalizar_sexo)
         agrupamento_sexo = list(dict.fromkeys(col_agrupamento_reais + [col_beneficiario, col_sexo]))
         df_sexo = df_sexo_base.drop_duplicates(subset=agrupamento_sexo)
@@ -1177,6 +1186,74 @@ elif pagina == PAGINAS[1]:
             )
             
             rel_cumul_display_completo = pd.concat([rel_cumul_display, rel_cumul_totais], ignore_index=True)
+            
+            cols_mensal = ['Ano', 'Mes', 'Província', 'Delegação', 'Distrito', 'Fonte', 'Programa', 'Implementador', 'Provedor servico', 'F', 'M', 'Benef. Distintos', '1x', '2x', '3x', '4x', '5x', '6x', '7x', '8x', '9x', '10x', '11x', '12x', 'Pagamentos', 'Valor Pago']
+            cols_acum = ['ANO', 'MES', 'PROVINCIA', 'DELEGACAO', 'DISTRITO', 'FONTE', 'PROGRAMA', 'IMPLEMENTADOR', 'PROVEDOR_SERVICO', 'F_ACUM', 'M_ACUM', 'BENEF_DISTINTOS_ACUM', '1X_ACUM', '2X_ACUM', '3X_ACUM', '4X_ACUM', '5X_ACUM', '6X_ACUM', '7X_ACUM', '8X_ACUM', '9X_ACUM', '10X_ACUM', '11X_ACUM', '12X_ACUM', 'PAGAMENTOS_ACUM', 'VALOR_PAGO_ACUM']
+            
+            def alinhar_colunas(df, target_cols):
+                import unicodedata
+                import re
+                def n(c): return unicodedata.normalize('NFKD', str(c)).encode('ASCII', 'ignore').decode('utf-8').lower().strip().replace('_', '').replace(' ', '')
+                t_map = {n(c): c for c in target_cols}
+                r_map = {}
+                for c in df.columns:
+                    nc = n(c)
+                    if nc in t_map: r_map[c] = t_map[nc]
+                    elif "x" in nc and c.upper() + "_ACUM" in target_cols: r_map[c] = c.upper() + "_ACUM"
+                    elif "x" in nc and c.lower() in target_cols: r_map[c] = c.lower()
+                    
+                df = df.rename(columns=r_map)
+                
+                # Converter Mês para número
+                def extract_month_num(val):
+                    if pd.isna(val) or str(val).strip() == "": return 1
+                    if str(val) == "TOTAL": return val
+                    val_str = str(val).lower()
+                    nums = re.findall(r'\d+', val_str)
+                    if nums: return int(nums[0])
+                    meses_map = {'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6, 'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12}
+                    for mes_chave, num in meses_map.items():
+                        if mes_chave in val_str: return num
+                    return 1
+
+                # Converter Ano
+                def extract_year_num(val):
+                    if pd.isna(val) or str(val).strip() == "": return 2026
+                    if str(val) == "TOTAL": return val
+                    val_str = str(val).lower()
+                    nums = re.findall(r'\d{4}', val_str)
+                    if nums: return int(nums[0])
+                    nums2 = re.findall(r'\d{2}', val_str)
+                    if nums2:
+                        y = int(nums2[0])
+                        return 2000 + y if y < 100 else y
+                    return 2026
+
+                if 'Mes' in df.columns:
+                    df['Mes'] = df['Mes'].apply(extract_month_num)
+                if 'MES' in df.columns:
+                    df['MES'] = df['MES'].apply(extract_month_num)
+                    
+                if 'Ano' in df.columns:
+                    df['Ano'] = df['Ano'].apply(extract_year_num)
+                if 'ANO' in df.columns:
+                    df['ANO'] = df['ANO'].apply(extract_year_num)
+                    
+                for tc in target_cols:
+                    if tc not in df.columns:
+                        if "x" in tc.lower() or tc in ['F', 'M', 'F_ACUM', 'M_ACUM', 'Benef. Distintos', 'BENEF_DISTINTOS_ACUM', 'Pagamentos', 'PAGAMENTOS_ACUM', 'Valor Pago', 'VALOR_PAGO_ACUM']:
+                            df[tc] = 0
+                        elif tc.lower() == 'mes':
+                            df[tc] = 1
+                        elif tc.lower() == 'ano':
+                            df[tc] = 2026
+                        else:
+                            df[tc] = ""
+                            
+                return df[target_cols]
+                
+            rel_display_completo = alinhar_colunas(rel_display_completo, cols_mensal)
+            rel_cumul_display_completo = alinhar_colunas(rel_cumul_display_completo, cols_acum)
         
         def destacar_totais_isolados(row):
             is_geral = False
@@ -1199,29 +1276,19 @@ elif pagina == PAGINAS[1]:
             except:
                 return str(val)
                 
-        format_dict = {col: format_mt for col in rel_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
-        format_dict_cumul = {col: format_mt for col in rel_cumul_display.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
+        format_dict = {col: format_mt for col in rel_display_completo.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
+        format_dict_cumul = {col: format_mt for col in rel_cumul_display_completo.columns if "valor" in str(col).lower() or "pago" in str(col).lower()}
         
         def formatar_excel(writer, df_to_write, sheet_name, filtros):
-            df_to_write.to_excel(writer, index=False, sheet_name=sheet_name)
+            df_export = df_to_write.copy()
+            mask_total = df_export.astype(str).eq("TOTAL").any(axis=1)
+            df_export = df_export[~mask_total]
+            
+            df_export.to_excel(writer, index=False, sheet_name=sheet_name)
             worksheet = writer.sheets[sheet_name]
             
             # Fixar cabeçalho
             worksheet.freeze_panes = 'A2'
-            
-            # Destacar linha de totais (a última linha)
-            try:
-                from openpyxl.styles import PatternFill, Font
-                fill_totais = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
-                font_totais = Font(bold=True)
-                
-                max_row = worksheet.max_row
-                for col in range(1, worksheet.max_column + 1):
-                    cell = worksheet.cell(row=max_row, column=col)
-                    cell.fill = fill_totais
-                    cell.font = font_totais
-            except:
-                pass
                 
             # Autofit column widths
             try:
@@ -1264,6 +1331,11 @@ elif pagina == PAGINAS[1]:
             headers = []
             for cell in ws[1]:
                 headers.append(cell.value)
+                
+            # Remover linha de "TOTAL" se existir
+            df_export = df_to_write.copy()
+            mask_total = df_export.astype(str).eq("TOTAL").any(axis=1)
+            df_to_write = df_export[~mask_total]
                 
             # Align dataframe to template headers
             df_aligned = pd.DataFrame()
