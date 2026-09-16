@@ -855,6 +855,18 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             novas_colunas.append(nome_limpo)
                     df.columns = novas_colunas
                     
+                    # --- FILTRAGEM DE PAGAMENTOS (Apenas PAID) ---
+                    col_status = None
+                    for c in df.columns:
+                        cn = str(c).strip().upper()
+                        if cn == 'PAYMENT_STATUS' or cn == 'STATUS' or 'ESTADO' in cn:
+                            col_status = c
+                            break
+                    
+                    if col_status:
+                        # Filtrar apenas as linhas com estado "PAID" (ignorando maiúsculas/minúsculas e espaços)
+                        df = df[df[col_status].astype(str).str.strip().str.upper() == 'PAID']
+                    
                     # --- VALIDAÇÃO DE MODELO ---
                     colunas_upper = [str(c).upper().strip() for c in novas_colunas]
                     
