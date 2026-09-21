@@ -235,7 +235,15 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
                     if col_mes:
                         agrup_sem_mes = [c for c in colunas_agrupamento if c != col_mes and c in df_resultado.columns]
                         if agrup_sem_mes:
-                            t_geral[col] = df_resultado.groupby(agrup_sem_mes)[col].max().sum()
+                            c_upper = str(col).strip().upper()
+                            if c_upper in ['PAGAMENTOS_ACUM', 'VALOR_PAGO_ACUM']:
+                                agrup_distrito = [c for c in agrup_sem_mes if any(x in str(c).lower() for x in ["ano", "prov", "distrito", "deleg"])]
+                                if agrup_distrito:
+                                    t_geral[col] = df_resultado.groupby(agrup_distrito)[col].max().sum()
+                                else:
+                                    t_geral[col] = df_resultado.groupby(agrup_sem_mes)[col].max().sum()
+                            else:
+                                t_geral[col] = df_resultado.groupby(agrup_sem_mes)[col].max().sum()
                         else:
                             t_geral[col] = df_resultado[col].max()
                     else:
@@ -298,10 +306,10 @@ def processar_relatorio(df, template):
         "província": ["provincia", "província", "province"],
         "delegação": ["delegacao", "delegação", "short_delegacao"],
         "distrito": ["distrito", "district"],
-        "fonte": ["fonte_financiamento", "fonte", "source"],
+        "fonte": ["fonte_financiamento", "fonte", "source", "financiador"],
         "programa": ["programa_social", "programa"],
         "implementador": ["implementador", "ps_name", "implementer"],  
-        "provedor": ["psp_name", "provedor", "operador"]
+        "provedor": ["psp_name", "provedor", "operador", "provedor de pagamento"]
     }
         
     col_agrupamento_reais = []
@@ -354,7 +362,7 @@ def processar_relatorio(df, template):
     if 'Beneficiario' in colunas_df:
         col_beneficiario = 'Beneficiario'
     else:
-        col_beneficiario = detetar_coluna(colunas_df, ['código', 'codigo', 'beneficiario', 'beneficiário', 'bi', 'nuit', 'agregado'])
+        col_beneficiario = detetar_coluna(colunas_df, ['codigo do af', 'código do af', 'codigo agregado', 'código agregado', 'nome do beneficiario', 'beneficiario', 'beneficiário', 'bi', 'nuit', 'agregado', 'código', 'codigo'])
         
     if 'Sexo' in colunas_df:
         col_sexo = 'Sexo'
@@ -726,16 +734,25 @@ def processar_relatorio(df, template):
                 return 0
                 
             df_cumulativo['_temp_sort_mes'] = df_cumulativo[col_mes_final].apply(_get_sort_m)
-            df_cumulativo = df_cumulativo.sort_values(by=col_agrup_sem_mes_finais + ['_temp_sort_mes'])
             
-            # Window Functions: SUM() OVER (PARTITION BY col_agrup_sem_mes_finais ORDER BY mes)
+            # Identificar colunas a nível de distrito para partição
+            partition_cols = [c for c in col_agrup_sem_mes_finais if any(x in str(c).lower() for x in ["ano", "prov", "distrito", "deleg"])]
+            if not partition_cols:
+                partition_cols = col_agrup_sem_mes_finais
+                
+            # Ordenar garantindo que a partição e o mês sejam respeitados
+            sort_cols = partition_cols + ['_temp_sort_mes'] + [c for c in col_agrup_sem_mes_finais if c not in partition_cols]
+            df_cumulativo = df_cumulativo.sort_values(by=sort_cols)
+            
+            # Window Functions: SUM() OVER (PARTITION BY partition_cols ORDER BY mes)
             if 'Pagamentos_Mensal' in df_cumulativo.columns:
-                df_cumulativo['Pagamentos'] = df_cumulativo.groupby(col_agrup_sem_mes_finais)['Pagamentos_Mensal'].cumsum()
+                df_cumulativo['Pagamentos'] = df_cumulativo.groupby(partition_cols)['Pagamentos_Mensal'].cumsum()
             if 'Valor_Mensal' in df_cumulativo.columns:
-                df_cumulativo['Valor Pago'] = df_cumulativo.groupby(col_agrup_sem_mes_finais)['Valor_Mensal'].cumsum()
+                df_cumulativo['Valor Pago'] = df_cumulativo.groupby(partition_cols)['Valor_Mensal'].cumsum()
             
             drop_cols = [c for c in ['Pagamentos_Mensal', 'Valor_Mensal', '_temp_sort_mes'] if c in df_cumulativo.columns]
             df_cumulativo = df_cumulativo.drop(columns=drop_cols)
+
             
             for col in df_cumulativo.columns:
                 if "ano" in str(col).lower():
@@ -814,8 +831,18 @@ Por favor verifique se escolheu o modelo correto antes de importar.
         _popup_erro_import()
     # ------------------------------------
     
-    modelos_disponiveis = ["INAS", "PMA", "GIVE"] # Outros modelos podem ser adicionados aqui no futuro
-    modelo_selecionado = st.selectbox("Selecione o Modelo a utilizar para os relatórios:", modelos_disponiveis, key="modelo_selecionado_ui")
+    modelos_disponiveis = ["INAS", "PMA", "GIVE", "SIB"] # Outros modelos podem ser adicionados aqui no futuro
+    
+    if "modelo_selecionado_salvo" not in st.session_state:
+        st.session_state.modelo_selecionado_salvo = "INAS"
+        
+    try:
+        idx_modelo = modelos_disponiveis.index(st.session_state.modelo_selecionado_salvo)
+    except ValueError:
+        idx_modelo = 0
+        
+    modelo_selecionado = st.selectbox("Selecione o Modelo a utilizar para os relatórios:", modelos_disponiveis, index=idx_modelo, key="modelo_selecionado_ui")
+    st.session_state.modelo_selecionado_salvo = modelo_selecionado
     
     if "uploader_key" not in st.session_state:
         st.session_state.uploader_key = 0
@@ -857,15 +884,22 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     
                     # --- FILTRAGEM DE PAGAMENTOS (Apenas PAID) ---
                     col_status = None
+                    # Tentar encontrar a coluna de estado do pagamento de forma mais precisa
                     for c in df.columns:
                         cn = str(c).strip().upper()
-                        if cn == 'PAYMENT_STATUS' or cn == 'STATUS' or 'ESTADO' in cn:
+                        if cn in ['PAYMENT_STATUS', 'STATUS DO PAGAMENTO', 'ESTADO DO PAGAMENTO']:
                             col_status = c
                             break
+                    if not col_status:
+                        for c in df.columns:
+                            cn = str(c).strip().upper()
+                            if cn == 'STATUS' or ('ESTADO' in cn and 'PAGAMENTO' in cn):
+                                col_status = c
+                                break
                     
                     if col_status:
-                        # Filtrar apenas as linhas com estado "PAID" (ignorando maiúsculas/minúsculas e espaços)
-                        df = df[df[col_status].astype(str).str.strip().str.upper() == 'PAID']
+                        # Filtrar apenas as linhas com estado "PAID", "PAGO" ou "REALIZADO"
+                        df = df[df[col_status].astype(str).str.strip().str.upper().isin(['PAID', 'PAGO', 'REALIZADO'])]
                     
                     # --- VALIDAÇÃO DE MODELO ---
                     colunas_upper = [str(c).upper().strip() for c in novas_colunas]
@@ -875,7 +909,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         "INAS": {
                             "obrigatorias": ["PROVINCIA", "DISTRITO", "DATA"],
                             "assinatura": None,   # não exige coluna única
-                            "proibidas": ["PI BARCODE", "CODIGO AGREGADO"],  # colunas que indicam outro modelo
+                            "proibidas": ["PI BARCODE", "CODIGO AGREGADO", "ID DO PAGAMENTO"],  # colunas que indicam outro modelo
                         },
                         "PMA": {
                             "obrigatorias": ["PI BARCODE", "PROVINCIA", "DISTRITO"],
@@ -886,6 +920,11 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             "obrigatorias": ["CODIGO AGREGADO", "PROVINCIA", "DISTRITO", "VALOR PAGO"],
                             "assinatura": "CODIGO AGREGADO",  # coluna exclusiva do GIVE
                             "proibidas": [],
+                        },
+                        "SIB": {
+                            "obrigatorias": ["PROVINCIA", "DISTRITO", "VALOR", "ID DO PAGAMENTO"],
+                            "assinatura": "ID DO PAGAMENTO",
+                            "proibidas": []
                         }
                     }
                     
@@ -1000,7 +1039,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         template_name = list(st.session_state.templates.keys())[0]
                     template = st.session_state.templates[template_name]
                     
-                    if st.session_state.get('modelo_selecionado') in ["INAS", "GIVE", "PMA"]:
+                    if st.session_state.get('modelo_selecionado') in ["INAS", "GIVE", "PMA", "SIB"]:
                         template = template.copy()
                         template["colunas_agrupamento"] = ["Ano ", "Mês", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico"]
                         template["colunas_string_join"] = []
@@ -1009,7 +1048,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     df_mensal, df_cumulativo, df_bruto_mapeado, meta_info = processar_relatorio(st.session_state.df_editado.copy(), template)
                     
                     # O output do modelo PMA é 100% igual ao INAS
-                    if st.session_state.get('modelo_selecionado') in ["INAS", "PMA", "GIVE"]:
+                    if st.session_state.get('modelo_selecionado') in ["INAS", "PMA", "GIVE", "SIB"]:
                         mensal_rename_map = {
                             "Ano ": "Ano", "Mês": "Mes", "Provedor  servico": "Provedor servico",
                             "1X": "1x", "2X": "2x", "3X": "3x", "4X": "4x", "5X": "5x", "6X": "6x", 
