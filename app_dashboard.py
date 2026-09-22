@@ -210,6 +210,28 @@ def adicionar_linha_totais(df_resultado, colunas_agrupamento, is_cumulativo=Fals
             if not has_set_geral:
                 t_geral[col] = "TOTAL"
                 has_set_geral = True
+            elif col == col_mes:
+                # Coluna Mes: listar todos os meses em ordem cronológica
+                _meses_ord = {'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6,
+                              'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12}
+                _meses_vistos = []
+                _meses_set = set()
+                for _v in df_resultado[col].dropna().astype(str):
+                    _v = _v.strip()
+                    if _v and _v.lower() not in ('n/d', 'nan', 'none', '') and _v not in _meses_set:
+                        _meses_set.add(_v)
+                        _meses_vistos.append(_v)
+                def _mes_sort_key(m):
+                    m_low = str(m).lower()
+                    for k, v in _meses_ord.items():
+                        if k in m_low:
+                            return v
+                    try:
+                        return int(m)
+                    except:
+                        return 99
+                _meses_vistos.sort(key=_mes_sort_key)
+                t_geral[col] = ", ".join(str(m) for m in _meses_vistos)
             else:
                 t_geral[col] = extract_unique_items(df_resultado[col])
         elif pd.api.types.is_numeric_dtype(df_resultado[col]) and not any(normalize_text(col) == normalize_text(c) for c in colunas_agrupamento):
@@ -286,12 +308,18 @@ def processar_relatorio(df, template):
             
     if col_data:
         try:
-            df['_dt'] = pd.to_datetime(df[col_data], errors='coerce')
+            # Limpar formatos complexos (ex: '13-JUL-26 02.44.59.542000000 PM') mantendo apenas a data
+            _dt_str = df[col_data].astype(str).str.split(' ').str[0].str.split('T').str[0]
+            df['_dt'] = pd.to_datetime(_dt_str, errors='coerce', dayfirst=True)
             df['Ano'] = df['_dt'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'N/D')
             meses_pt = {1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'}
             df['Mês'] = df['_dt'].dt.month.map(meses_pt).fillna('N/D')
         except:
-            pass
+            df['Ano'] = 'N/D'
+            df['Mês'] = 'N/D'
+    else:
+        df['Ano'] = 'N/D'
+        df['Mês'] = 'N/D'
 
     colunas_df = df.columns.tolist()
     col_agrupamento = template["colunas_agrupamento"]
@@ -302,7 +330,7 @@ def processar_relatorio(df, template):
         
     aliases = {
         "ano": ["ano_pagamento", "ano", "year"],
-        "mês": ["meses_pagamento", "mes", "mês", "meses", "month"],
+        "mês": ["mes", "mês", "meses", "month"],
         "província": ["provincia", "província", "province"],
         "delegação": ["delegacao", "delegação", "short_delegacao"],
         "distrito": ["distrito", "district"],
@@ -1004,14 +1032,16 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         # Assumimos que o formador é pelo menos reconhecível por pandas, ou injetamos fixo para '01/01/2026'
                         def extrair_ano(data):
                             try:
-                                return pd.to_datetime(data, dayfirst=True).year
+                                d_str = str(data).split(' ')[0].split('T')[0]
+                                return pd.to_datetime(d_str, dayfirst=True).year
                             except:
                                 return 2026
                                 
                         def extrair_mes(data):
                             meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
                             try:
-                                m = pd.to_datetime(data, dayfirst=True).month
+                                d_str = str(data).split(' ')[0].split('T')[0]
+                                m = pd.to_datetime(d_str, dayfirst=True).month
                                 return meses[m-1]
                             except:
                                 return 'Janeiro'
@@ -1025,8 +1055,20 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         
                     if modelo_selecionado == "INAS":
                         df['Implementador'] = 'INAS'
+                        df['Provedor'] = 'INAS'
                         df['Fonte'] = ''
-                    # -----------------------------
+                        
+                        # --- DETECTAR "SISTEMA OU PARCEIRO" ---
+                        _col_sistema = None
+                        for _c in df.columns:
+                            _cn = str(_c).strip().lower().replace(' ', '').replace('_', '').replace('/', '')
+                            if _cn in ['sistemaouparceiro', 'sistema', 'parceiro', 'sistemaparceiro', 'sistemapsp', 'psp', 'sistemaoufonte']:
+                                _col_sistema = _c
+                                break
+                        if _col_sistema and _col_sistema != 'Sistema ou Parceiro':
+                            df.rename(columns={_col_sistema: 'Sistema ou Parceiro'}, inplace=True)
+                        elif not _col_sistema:
+                            df['Sistema ou Parceiro'] = ''
                     
                     st.session_state.df = df
                     st.session_state.df_editado = df.copy()
@@ -1041,7 +1083,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     
                     if st.session_state.get('modelo_selecionado') in ["INAS", "GIVE", "PMA", "SIB"]:
                         template = template.copy()
-                        template["colunas_agrupamento"] = ["Ano ", "Mês", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico"]
+                        template["colunas_agrupamento"] = ["Ano ", "Mês", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico", "Sistema ou Parceiro"]
                         template["colunas_string_join"] = []
                         template["colunas_metricas"] = ["F", "M", "Benef. Distintos", "1X", "2X", "3X", "4X", "5X", "6X", "7X", "8X", "9X", "10X", "11X", "12X", "Pagamentos", "Valor Pago"]
                     
@@ -1099,14 +1141,12 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             df_mensal["Implementador"] = "PMA"
                             df_cumulativo["Provedor servico"] = "Mpesa"
                             df_mensal["Provedor servico"] = "Mpesa"
-                        elif st.session_state.get('modelo_selecionado') == "INAS":
-                            df_cumulativo["Implementador"] = "INAS"
-                            df_mensal["Implementador"] = "INAS"
                         else:
-                            if "Implementador" not in df_cumulativo.columns or df_cumulativo["Implementador"].astype(str).str.strip().eq("").all():
-                                df_cumulativo["Implementador"] = ""
-                            if "Implementador" not in df_mensal.columns or df_mensal["Implementador"].astype(str).str.strip().eq("").all():
-                                df_mensal["Implementador"] = ""
+                            _mod = st.session_state.get('modelo_selecionado')
+                            df_cumulativo["Implementador"] = _mod
+                            df_mensal["Implementador"] = _mod
+                            df_cumulativo["Provedor servico"] = _mod
+                            df_mensal["Provedor servico"] = _mod
                         
                         if "Programa" in df_mensal.columns and df_mensal["Programa"].astype(str).str.strip().eq("").all():
                             df_mensal["Programa"] = "PSSB"
@@ -1118,7 +1158,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         elif "Programa" not in df_cumulativo.columns:
                             df_cumulativo["Programa"] = "PSSB"
                         
-                        mensal_cols_order = ["Ano", "Mes", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "F", "M", "Benef. Distintos", "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x", "11x", "12x", "Pagamentos", "Valor Pago"]
+                        mensal_cols_order = ["Ano", "Mes", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "Sistema ou Parceiro", "F", "M", "Benef. Distintos", "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x", "11x", "12x", "Pagamentos", "Valor Pago"]
                         for c in mensal_cols_order:
                             if c not in df_mensal.columns:
                                 df_mensal[c] = 0 if c in ["F", "M", "Benef. Distintos", "Pagamentos", "Valor Pago"] or c.endswith("x") else ""
@@ -1130,12 +1170,12 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             
                         df_mensal = df_mensal[mensal_cols_order]
                         
-                        cumul_cols_order = ["Ano", "Mes", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "F_ACUM", "M_ACUM", "BENEF_DISTINTOS_ACUM", "1X_ACUM", "2X_ACUM", "3X_ACUM", "4X_ACUM", "5X_ACUM", "6X_ACUM", "7X_ACUM", "8X_ACUM", "9X_ACUM", "10X_ACUM", "11X_ACUM", "12X_ACUM", "PAGAMENTOS_ACUM", "VALOR_PAGO_ACUM"]
+                        cumul_cols_order = ["Ano", "Mes", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "Sistema ou Parceiro", "F_ACUM", "M_ACUM", "BENEF_DISTINTOS_ACUM", "1X_ACUM", "2X_ACUM", "3X_ACUM", "4X_ACUM", "5X_ACUM", "6X_ACUM", "7X_ACUM", "8X_ACUM", "9X_ACUM", "10X_ACUM", "11X_ACUM", "12X_ACUM", "PAGAMENTOS_ACUM", "VALOR_PAGO_ACUM"]
                         for c in cumul_cols_order:
                             if c not in df_cumulativo.columns:
                                 df_cumulativo[c] = 0 if "_ACUM" in c else ""
                         df_cumulativo = df_cumulativo[cumul_cols_order]
-                        template["colunas_agrupamento"] = ["Ano", "Mes", "Província", "Delegação", "Distrito", "Fonte", "Programa", "Implementador", "Provedor servico"]
+                        template["colunas_agrupamento"] = ["Ano", "Mes", "Província", "Delegação", "Distrito", "Fonte", "Programa", "Implementador", "Provedor servico", "Sistema ou Parceiro"]
                         st.session_state.relatorio_final = df_mensal
                         st.session_state.relatorio_cumulativo = df_cumulativo
                     
@@ -1194,20 +1234,34 @@ elif pagina == PAGINAS[1]:
             asc_list = []
             
             # 1. Ano
-            if "Ano " in st.session_state.col_agrupamento:
-                sort_cols.append("Ano ")
-                asc_list.append(True) # Crescente
-            elif "Ano" in st.session_state.col_agrupamento:
-                sort_cols.append("Ano")
-                asc_list.append(True) # Crescente
-                
-            # 2. Mês (Cronológico Global)
-            sort_cols.append('_sort_mes')
-            asc_list.append(True) # Crescente
+            for _c in st.session_state.col_agrupamento:
+                if 'ano' in str(_c).lower():
+                    sort_cols.append(_c)
+                    asc_list.append(True)
+                    break
             
-            # 3. Restantes dimensões
+            # 2. Dimensões geográficas (Província → Delegação → Distrito) — agrupa por distrito
+            _geo_keywords = [('prov', 0), ('deleg', 1), ('distrit', 2)]
+            _geo_cols = []
+            for _c in st.session_state.col_agrupamento:
+                _cn = str(_c).lower()
+                if _c not in sort_cols:
+                    for _kw, _pri in _geo_keywords:
+                        if _kw in _cn:
+                            _geo_cols.append((_pri, _c))
+                            break
+            _geo_cols.sort(key=lambda x: x[0])
+            for _, _c in _geo_cols:
+                sort_cols.append(_c)
+                asc_list.append(True)
+            
+            # 3. Mês cronológico (dentro de cada distrito)
+            sort_cols.append('_sort_mes')
+            asc_list.append(True)
+            
+            # 4. Restantes dimensões (Fonte, Programa, Implementador, etc.)
             for c in st.session_state.col_agrupamento:
-                if c != col_m and "ano" not in str(c).lower() and c in rel_display.columns:
+                if c not in sort_cols and c != col_m and c in rel_display.columns:
                     sort_cols.append(c)
                     asc_list.append(True)
                     
@@ -1238,8 +1292,8 @@ elif pagina == PAGINAS[1]:
             
             rel_cumul_display_completo = pd.concat([rel_cumul_display, rel_cumul_totais], ignore_index=True)
             
-            cols_mensal = ['Ano', 'Mes', 'Província', 'Delegação', 'Distrito', 'Fonte', 'Programa', 'Implementador', 'Provedor servico', 'F', 'M', 'Benef. Distintos', '1x', '2x', '3x', '4x', '5x', '6x', '7x', '8x', '9x', '10x', '11x', '12x', 'Pagamentos', 'Valor Pago']
-            cols_acum = ['ANO', 'MES', 'PROVINCIA', 'DELEGACAO', 'DISTRITO', 'FONTE', 'PROGRAMA', 'IMPLEMENTADOR', 'PROVEDOR_SERVICO', 'F_ACUM', 'M_ACUM', 'BENEF_DISTINTOS_ACUM', '1X_ACUM', '2X_ACUM', '3X_ACUM', '4X_ACUM', '5X_ACUM', '6X_ACUM', '7X_ACUM', '8X_ACUM', '9X_ACUM', '10X_ACUM', '11X_ACUM', '12X_ACUM', 'PAGAMENTOS_ACUM', 'VALOR_PAGO_ACUM']
+            cols_mensal = ['Ano', 'Mes', 'Província', 'Delegação', 'Distrito', 'Fonte', 'Programa', 'Implementador', 'Provedor servico', 'Sistema ou Parceiro', 'F', 'M', 'Benef. Distintos', '1x', '2x', '3x', '4x', '5x', '6x', '7x', '8x', '9x', '10x', '11x', '12x', 'Pagamentos', 'Valor Pago']
+            cols_acum = ['ANO', 'MES', 'PROVINCIA', 'DELEGACAO', 'DISTRITO', 'FONTE', 'PROGRAMA', 'IMPLEMENTADOR', 'PROVEDOR_SERVICO', 'SISTEMA_OU_PARCEIRO', 'F_ACUM', 'M_ACUM', 'BENEF_DISTINTOS_ACUM', '1X_ACUM', '2X_ACUM', '3X_ACUM', '4X_ACUM', '5X_ACUM', '6X_ACUM', '7X_ACUM', '8X_ACUM', '9X_ACUM', '10X_ACUM', '11X_ACUM', '12X_ACUM', 'PAGAMENTOS_ACUM', 'VALOR_PAGO_ACUM']
             
             def alinhar_colunas(df, target_cols):
                 import unicodedata
@@ -1259,7 +1313,11 @@ elif pagina == PAGINAS[1]:
                 def extract_month_num(val):
                     if pd.isna(val) or str(val).strip() == "": return 1
                     if str(val) == "TOTAL": return val
-                    val_str = str(val).lower()
+                    val_str = str(val)
+                    # Preservar strings com múltiplos meses (linha de TOTAL)
+                    if ',' in val_str:
+                        return val_str
+                    val_str = val_str.lower()
                     nums = re.findall(r'\d+', val_str)
                     if nums: return int(nums[0])
                     meses_map = {'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6, 'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12}
