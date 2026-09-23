@@ -1055,21 +1055,11 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         
                     if modelo_selecionado == "INAS":
                         df['Implementador'] = 'INAS'
-                        df['Provedor'] = 'INAS'
                         df['Fonte'] = ''
                         
-                        # --- DETECTAR "SISTEMA OU PARCEIRO" ---
-                        _col_sistema = None
-                        for _c in df.columns:
-                            _cn = str(_c).strip().lower().replace(' ', '').replace('_', '').replace('/', '')
-                            if _cn in ['sistemaouparceiro', 'sistema', 'parceiro', 'sistemaparceiro', 'sistemapsp', 'psp', 'sistemaoufonte']:
-                                _col_sistema = _c
-                                break
-                        if _col_sistema and _col_sistema != 'Sistema ou Parceiro':
-                            df.rename(columns={_col_sistema: 'Sistema ou Parceiro'}, inplace=True)
-                        elif not _col_sistema:
-                            df['Sistema ou Parceiro'] = ''
-                    
+                    # Preencher Sistema ou Parceiro com o modelo seleccionado
+                    df['Sistema ou Parceiro'] = modelo_selecionado
+
                     st.session_state.df = df
                     st.session_state.df_editado = df.copy()
                     st.session_state.relatorio_final = None 
@@ -1141,12 +1131,14 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             df_mensal["Implementador"] = "PMA"
                             df_cumulativo["Provedor servico"] = "Mpesa"
                             df_mensal["Provedor servico"] = "Mpesa"
+                        elif st.session_state.get('modelo_selecionado') == "INAS":
+                            df_cumulativo["Implementador"] = "INAS"
+                            df_mensal["Implementador"] = "INAS"
                         else:
-                            _mod = st.session_state.get('modelo_selecionado')
-                            df_cumulativo["Implementador"] = _mod
-                            df_mensal["Implementador"] = _mod
-                            df_cumulativo["Provedor servico"] = _mod
-                            df_mensal["Provedor servico"] = _mod
+                            if "Implementador" not in df_cumulativo.columns or df_cumulativo["Implementador"].astype(str).str.strip().eq("").all():
+                                df_cumulativo["Implementador"] = ""
+                            if "Implementador" not in df_mensal.columns or df_mensal["Implementador"].astype(str).str.strip().eq("").all():
+                                df_mensal["Implementador"] = ""
                         
                         if "Programa" in df_mensal.columns and df_mensal["Programa"].astype(str).str.strip().eq("").all():
                             df_mensal["Programa"] = "PSSB"
