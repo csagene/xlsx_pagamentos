@@ -1067,7 +1067,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                     
                     if st.session_state.get('modelo_selecionado') in ["INAS", "GIVE", "PMA", "SIB"]:
                         template = template.copy()
-                        template["colunas_agrupamento"] = ["Ano ", "Mês", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico", "Sistema ou Parceiro"]
+                        template["colunas_agrupamento"] = ["Ano ", "Mês", "Sistema ou Parceiro", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor  servico"]
                         template["colunas_string_join"] = []
                         template["colunas_metricas"] = ["F", "M", "Benef. Distintos", "1X", "2X", "3X", "4X", "5X", "6X", "7X", "8X", "9X", "10X", "11X", "12X", "Pagamentos", "Valor Pago"]
                     
@@ -1144,7 +1144,7 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                         elif "Programa" not in df_cumulativo.columns:
                             df_cumulativo["Programa"] = "PSSB"
                         
-                        mensal_cols_order = ["Ano", "Mes", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "Sistema ou Parceiro", "F", "M", "Benef. Distintos", "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x", "11x", "12x", "Pagamentos", "Valor Pago"]
+                        mensal_cols_order = ["Ano", "Mes", "Sistema ou Parceiro", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "F", "M", "Benef. Distintos", "1x", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x", "11x", "12x", "Pagamentos", "Valor Pago"]
                         for c in mensal_cols_order:
                             if c not in df_mensal.columns:
                                 df_mensal[c] = 0 if c in ["F", "M", "Benef. Distintos", "Pagamentos", "Valor Pago"] or c.endswith("x") else ""
@@ -1156,12 +1156,12 @@ Por favor verifique se escolheu o modelo correto antes de importar.
                             
                         df_mensal = df_mensal[mensal_cols_order]
                         
-                        cumul_cols_order = ["Ano", "Mes", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "Sistema ou Parceiro", "F_ACUM", "M_ACUM", "BENEF_DISTINTOS_ACUM", "1X_ACUM", "2X_ACUM", "3X_ACUM", "4X_ACUM", "5X_ACUM", "6X_ACUM", "7X_ACUM", "8X_ACUM", "9X_ACUM", "10X_ACUM", "11X_ACUM", "12X_ACUM", "PAGAMENTOS_ACUM", "VALOR_PAGO_ACUM"]
+                        cumul_cols_order = ["Ano", "Mes", "Sistema ou Parceiro", "Província", "Distrito", "Delegação", "Fonte", "Programa", "Implementador", "Provedor servico", "F_ACUM", "M_ACUM", "BENEF_DISTINTOS_ACUM", "1X_ACUM", "2X_ACUM", "3X_ACUM", "4X_ACUM", "5X_ACUM", "6X_ACUM", "7X_ACUM", "8X_ACUM", "9X_ACUM", "10X_ACUM", "11X_ACUM", "12X_ACUM", "PAGAMENTOS_ACUM", "VALOR_PAGO_ACUM"]
                         for c in cumul_cols_order:
                             if c not in df_cumulativo.columns:
                                 df_cumulativo[c] = 0 if "_ACUM" in c else ""
                         df_cumulativo = df_cumulativo[cumul_cols_order]
-                        template["colunas_agrupamento"] = ["Ano", "Mes", "Província", "Delegação", "Distrito", "Fonte", "Programa", "Implementador", "Provedor servico", "Sistema ou Parceiro"]
+                        template["colunas_agrupamento"] = ["Ano", "Mes", "Sistema ou Parceiro", "Província", "Delegação", "Distrito", "Fonte", "Programa", "Implementador", "Provedor servico"]
                         st.session_state.relatorio_final = df_mensal
                         st.session_state.relatorio_cumulativo = df_cumulativo
                     
@@ -1278,8 +1278,8 @@ elif pagina == PAGINAS[1]:
             
             rel_cumul_display_completo = pd.concat([rel_cumul_display, rel_cumul_totais], ignore_index=True)
             
-            cols_mensal = ['Ano', 'Mes', 'Província', 'Delegação', 'Distrito', 'Fonte', 'Programa', 'Implementador', 'Provedor servico', 'Sistema ou Parceiro', 'F', 'M', 'Benef. Distintos', '1x', '2x', '3x', '4x', '5x', '6x', '7x', '8x', '9x', '10x', '11x', '12x', 'Pagamentos', 'Valor Pago']
-            cols_acum = ['ANO', 'MES', 'PROVINCIA', 'DELEGACAO', 'DISTRITO', 'FONTE', 'PROGRAMA', 'IMPLEMENTADOR', 'PROVEDOR_SERVICO', 'SISTEMA_OU_PARCEIRO', 'F_ACUM', 'M_ACUM', 'BENEF_DISTINTOS_ACUM', '1X_ACUM', '2X_ACUM', '3X_ACUM', '4X_ACUM', '5X_ACUM', '6X_ACUM', '7X_ACUM', '8X_ACUM', '9X_ACUM', '10X_ACUM', '11X_ACUM', '12X_ACUM', 'PAGAMENTOS_ACUM', 'VALOR_PAGO_ACUM']
+            cols_mensal = ['Ano', 'Mes', 'Sistema ou Parceiro', 'Província', 'Delegação', 'Distrito', 'Fonte', 'Programa', 'Implementador', 'Provedor servico', 'F', 'M', 'Benef. Distintos', '1x', '2x', '3x', '4x', '5x', '6x', '7x', '8x', '9x', '10x', '11x', '12x', 'Pagamentos', 'Valor Pago']
+            cols_acum = ['ANO', 'MES', 'SISTEMA_OU_PARCEIRO', 'PROVINCIA', 'DELEGACAO', 'DISTRITO', 'FONTE', 'PROGRAMA', 'IMPLEMENTADOR', 'PROVEDOR_SERVICO', 'F_ACUM', 'M_ACUM', 'BENEF_DISTINTOS_ACUM', '1X_ACUM', '2X_ACUM', '3X_ACUM', '4X_ACUM', '5X_ACUM', '6X_ACUM', '7X_ACUM', '8X_ACUM', '9X_ACUM', '10X_ACUM', '11X_ACUM', '12X_ACUM', 'PAGAMENTOS_ACUM', 'VALOR_PAGO_ACUM']
             
             def alinhar_colunas(df, target_cols):
                 import unicodedata
