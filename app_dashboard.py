@@ -290,13 +290,7 @@ def normalize_text(text):
     return text.lower().strip()
 
 def processar_relatorio(df, template):
-    # Priorizar Short_delegacao sobre Delegacao
-    colunas_norm = {normalize_text(c): c for c in df.columns}
-    if "short_delegacao" in colunas_norm:
-        col_short = colunas_norm["short_delegacao"]
-        for c_norm in ["delegacao", "delegação"]:
-            if c_norm in colunas_norm and colunas_norm[c_norm] != col_short:
-                df[colunas_norm[c_norm]] = df[col_short]
+    # Removido: Priorizar Short_delegacao sobre Delegacao (a pedido do utilizador, deve usar a própria Delegação)
 
     # Extrair Ano e Mês da 'data de actualizacao'
     col_data = None
@@ -332,7 +326,7 @@ def processar_relatorio(df, template):
         "ano": ["ano_pagamento", "ano", "year"],
         "mês": ["mes", "mês", "meses", "month"],
         "província": ["provincia", "província", "province"],
-        "delegação": ["delegacao", "delegação", "short_delegacao"],
+        "delegação": ["delegacao", "delegação"],
         "distrito": ["distrito", "district"],
         "fonte": ["fonte_financiamento", "fonte", "source", "financiador"],
         "programa": ["programa_social", "programa"],
